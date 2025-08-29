@@ -70,7 +70,8 @@ contract OptimisticMediationExample is Test {
         OptimisticMediationValidator.DemandData
             memory demandData = OptimisticMediationValidator.DemandData({
                 mediator: mediator,
-                mediationDeadline: mediationDeadline
+                mediationDeadline: mediationDeadline,
+                additionalData: bytes("Task: Provide computation service")
             });
         bytes memory demand = abi.encode(demandData);
 
@@ -101,12 +102,7 @@ contract OptimisticMediationExample is Test {
 
         // Server requests mediation (emits event for mediator)
         vm.prank(server);
-        mediationValidator.requestMediation(
-            demand,
-            fulfillment,
-            mediator,
-            mediationDeadline
-        );
+        mediationValidator.requestMediation(demandData, fulfillment);
 
         // Fast forward past mediation deadline - mediator didn't respond
         vm.warp(block.timestamp + 6 minutes);
@@ -136,7 +132,8 @@ contract OptimisticMediationExample is Test {
         OptimisticMediationValidator.DemandData
             memory demandData = OptimisticMediationValidator.DemandData({
                 mediator: mediator,
-                mediationDeadline: mediationDeadline
+                mediationDeadline: mediationDeadline,
+                additionalData: bytes("Service Level Agreement: 99.9% uptime")
             });
         bytes memory demand = abi.encode(demandData);
 
@@ -200,7 +197,8 @@ contract OptimisticMediationExample is Test {
         OptimisticMediationValidator.DemandData
             memory demandData = OptimisticMediationValidator.DemandData({
                 mediator: mediator,
-                mediationDeadline: mediationDeadline
+                mediationDeadline: mediationDeadline,
+                additionalData: abi.encode("Task ID: ", uint256(12345))
             });
         bytes memory demand = abi.encode(demandData);
 
@@ -271,7 +269,8 @@ contract OptimisticMediationExample is Test {
         OptimisticMediationValidator.DemandData memory demandData = OptimisticMediationValidator
             .DemandData({
                 mediator: mediator, // mediator is the designated one
-                mediationDeadline: mediationDeadline
+                mediationDeadline: mediationDeadline,
+                additionalData: bytes("Priority: High")
             });
         bytes memory demand = abi.encode(demandData);
 
@@ -332,7 +331,7 @@ contract OptimisticMediationExample is Test {
         validationEscrow.reclaimExpired(escrowId);
     }
 
-    function testValidatorSelfRegistration() public {
+    function testValidatorSelfRegistration() public view {
         // Verify that the OptimisticMediationValidator successfully registered itself
         assertTrue(identityRegistry.agentExists(validatorAgentId));
 
@@ -366,10 +365,11 @@ contract OptimisticMediationExample is Test {
         uint256 escrowAmount = 0.5 ether;
         uint256 mediationDeadline = block.timestamp + 10 minutes;
 
-        OptimisticMediationValidator.DemandData
-            memory demandData = OptimisticMediationValidator.DemandData({
+        OptimisticMediationValidator.DemandData memory demandData = OptimisticMediationValidator
+            .DemandData({
                 mediator: mediator,
-                mediationDeadline: mediationDeadline
+                mediationDeadline: mediationDeadline,
+                additionalData: hex"0123456789abcdef" // Example hex data
             });
         bytes memory demand = abi.encode(demandData);
 
@@ -435,7 +435,8 @@ contract OptimisticMediationExample is Test {
         OptimisticMediationValidator.DemandData
             memory demandData = OptimisticMediationValidator.DemandData({
                 mediator: mediator,
-                mediationDeadline: mediationDeadline
+                mediationDeadline: mediationDeadline,
+                additionalData: abi.encode("Metadata", true, uint256(42))
             });
         bytes memory demand = abi.encode(demandData);
 
@@ -459,6 +460,10 @@ contract OptimisticMediationExample is Test {
             serverAgentId,
             keccak256(abi.encodePacked(demand, fulfillment))
         );
+
+        // Request mediation with additional context
+        vm.prank(server);
+        mediationValidator.requestMediation(demandData, fulfillment);
 
         // Try to validate before deadline without mediator response - should revert
         vm.prank(address(this));
@@ -494,10 +499,11 @@ contract OptimisticMediationExample is Test {
         uint256 escrowAmount = 1 ether;
         uint256 mediationDeadline = block.timestamp + 20 minutes;
 
-        OptimisticMediationValidator.DemandData
-            memory demandData = OptimisticMediationValidator.DemandData({
+        OptimisticMediationValidator.DemandData memory demandData = OptimisticMediationValidator
+            .DemandData({
                 mediator: mediator,
-                mediationDeadline: mediationDeadline
+                mediationDeadline: mediationDeadline,
+                additionalData: bytes("") // Empty additional data is valid
             });
         bytes memory demand = abi.encode(demandData);
 
@@ -543,6 +549,99 @@ contract OptimisticMediationExample is Test {
         // Server cannot claim due to rejection (score 0 < minValidation 80)
         vm.prank(server);
         vm.expectRevert(ValidationEscrow.InvalidValidation.selector);
+        validationEscrow.claimEscrow(escrowId, fulfillment);
+    }
+
+    function testMediationRequestEvent() public {
+        // Test that mediation request emits correct event with additionalData
+        uint256 mediationDeadline = block.timestamp + 30 minutes;
+        bytes memory additionalData = bytes("Important context for mediator");
+
+        OptimisticMediationValidator.DemandData
+            memory demandData = OptimisticMediationValidator.DemandData({
+                mediator: mediator,
+                mediationDeadline: mediationDeadline,
+                additionalData: additionalData
+            });
+        bytes memory fulfillment = bytes("event test data");
+
+        // Server requests mediation - this will emit the MediationRequested event
+        vm.prank(server);
+        mediationValidator.requestMediation(demandData, fulfillment);
+    }
+
+    function testComplexAdditionalData() public {
+        // Test with complex structured additional data
+        uint256 escrowAmount = 1.5 ether;
+        uint256 mediationDeadline = block.timestamp + 45 minutes;
+
+        // Create complex additional data
+        bytes memory complexAdditionalData = abi.encode(
+            "Task Type: Machine Learning Training",
+            uint256(1000000), // Dataset size
+            address(0xdead), // Reference contract
+            true // Requires GPU
+        );
+
+        OptimisticMediationValidator.DemandData
+            memory demandData = OptimisticMediationValidator.DemandData({
+                mediator: mediator,
+                mediationDeadline: mediationDeadline,
+                additionalData: complexAdditionalData
+            });
+        bytes memory demand = abi.encode(demandData);
+
+        // Client deposits escrow
+        vm.prank(client);
+        uint256 escrowId = validationEscrow.depositEscrow{value: escrowAmount}(
+            validatorAgentId,
+            serverAgentId,
+            escrowAmount,
+            block.timestamp + 4 hours,
+            75,
+            demand
+        );
+
+        // Server prepares fulfillment
+        bytes memory fulfillment = abi.encode(
+            "Model trained successfully",
+            uint256(95), // Accuracy percentage
+            bytes32(
+                0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+            ) // Model hash
+        );
+
+        // Calculate dataHash
+        bytes32 dataHash = keccak256(abi.encodePacked(demand, fulfillment));
+
+        // Server requests validation
+        vm.prank(server);
+        validationRegistry.validationRequest(
+            validatorAgentId,
+            serverAgentId,
+            dataHash
+        );
+
+        // Server requests mediation with complex data
+        vm.prank(server);
+        mediationValidator.requestMediation(demandData, fulfillment);
+
+        // Mediator accepts the complex validation
+        bytes32 mediationDataHash = keccak256(
+            abi.encodePacked(demand, fulfillment)
+        );
+        vm.prank(mediator);
+        mediationValidator.mediate(
+            mediationDataHash,
+            OptimisticMediationValidator.MediationResponse.ACCEPTED
+        );
+
+        // Validate
+        vm.prank(address(this));
+        mediationValidator.validate(demandData, fulfillment);
+
+        // Server claims successfully
+        vm.prank(server);
         validationEscrow.claimEscrow(escrowId, fulfillment);
     }
 }

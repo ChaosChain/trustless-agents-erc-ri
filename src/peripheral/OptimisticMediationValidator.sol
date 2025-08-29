@@ -8,6 +8,7 @@ contract OptimisticMediationValidator {
     struct DemandData {
         address mediator;
         uint256 mediationDeadline;
+        bytes additionalData; // Extra field for arbitrary data
     }
 
     enum MediationResponse {
@@ -21,7 +22,7 @@ contract OptimisticMediationValidator {
     event MediationRequested(
         address mediator,
         uint256 mediationDeadline,
-        bytes demand,
+        bytes additionalData, // Emit the additional data instead of full demand
         bytes fulfillment
     );
 
@@ -62,15 +63,13 @@ contract OptimisticMediationValidator {
     }
 
     function requestMediation(
-        bytes memory demand,
-        bytes memory fulfillment,
-        address mediator,
-        uint256 mediationDeadline
+        DemandData memory demand,
+        bytes memory fulfillment
     ) external {
         emit MediationRequested(
-            mediator,
-            mediationDeadline,
-            demand,
+            demand.mediator,
+            demand.mediationDeadline,
+            demand.additionalData,
             fulfillment
         );
     }
