@@ -3,7 +3,6 @@ pragma solidity ^0.8.19;
 
 import "../interfaces/IValidationRegistry.sol";
 import "../interfaces/IIdentityRegistry.sol";
-import "../interfaces/IValidator.sol";
 
 contract ValidationEscrow {
     struct Escrow {
@@ -13,7 +12,6 @@ contract ValidationEscrow {
         uint256 amount;
         uint256 expirationTime;
         uint8 minValidation;
-        address validator;
         bytes demand;
     }
 
@@ -21,7 +19,11 @@ contract ValidationEscrow {
         uint256 indexed escrowId,
         address indexed escrower
     );
-    event EscrowClaimEvent(uint256 indexed escrowId, address indexed claimant);
+    event EscrowClaimEvent(
+        uint256 indexed escrowId,
+        address indexed claimant,
+        bytes fulfillment
+    );
     event EscrowReclaimEvent(
         uint256 indexed escrowId,
         address indexed escrower
@@ -52,7 +54,6 @@ contract ValidationEscrow {
         uint256 amount,
         uint256 expirationTime,
         uint8 minValidation,
-        address validator,
         bytes memory demand
     ) external payable returns (uint256 escrowId_) {
         if (!identityRegistry.agentExists(agentValidatorId)) {
@@ -80,14 +81,16 @@ contract ValidationEscrow {
             amount,
             expirationTime,
             minValidation,
-            validator,
             demand
         );
 
         emit EscrowDepositEvent(escrowId_, msg.sender);
     }
 
-    function claimEscrow(uint256 escrowId, bytes32 dataHash) external {
+    function claimEscrow(
+        uint256 escrowId,
+        bytes calldata fulfillment
+    ) external {
         Escrow storage escrow = _escrows[escrowId];
         if (escrow.amount == 0) {
             revert InvalidEscrow();
@@ -105,7 +108,9 @@ contract ValidationEscrow {
             revert UnauthorizedClaim();
         }
 
-        IValidator(escrow.validator).validate(dataHash, escrow.demand);
+        bytes32 dataHash = keccak256(
+            abi.encodePacked(escrow.demand, fulfillment)
+        );
 
         IValidationRegistry.Request
             memory validationRequest = validationRegistry.getValidationRequest(
@@ -136,7 +141,7 @@ contract ValidationEscrow {
         }
 
         _claimed[escrowId] = true;
-        emit EscrowClaimEvent(escrowId, msg.sender);
+        emit EscrowClaimEvent(escrowId, msg.sender, fulfillment);
     }
 
     function reclaimExpired(uint256 escrowId) external {

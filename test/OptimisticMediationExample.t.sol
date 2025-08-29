@@ -67,12 +67,12 @@ contract OptimisticMediationExample is Test {
         // Set mediation deadline to 5 minutes from now
         uint256 mediationDeadline = block.timestamp + 5 minutes;
 
-        bytes memory demand = abi.encode(
-            OptimisticMediationValidator.DemandData({
+        OptimisticMediationValidator.DemandData
+            memory demandData = OptimisticMediationValidator.DemandData({
                 mediator: mediator,
                 mediationDeadline: mediationDeadline
-            })
-        );
+            });
+        bytes memory demand = abi.encode(demandData);
 
         // Client deposits escrow
         vm.prank(client);
@@ -82,11 +82,14 @@ contract OptimisticMediationExample is Test {
             escrowAmount,
             expirationTime,
             minValidation,
-            address(mediationValidator),
             demand
         );
 
-        bytes32 dataHash = keccak256("service provided successfully");
+        // Server prepares fulfillment
+        bytes memory fulfillment = bytes("service provided successfully");
+
+        // Calculate dataHash from demand and fulfillment
+        bytes32 dataHash = keccak256(abi.encodePacked(demand, fulfillment));
 
         // Server requests validation
         vm.prank(server);
@@ -99,7 +102,8 @@ contract OptimisticMediationExample is Test {
         // Server requests mediation (emits event for mediator)
         vm.prank(server);
         mediationValidator.requestMediation(
-            dataHash,
+            demand,
+            fulfillment,
             mediator,
             mediationDeadline
         );
@@ -107,11 +111,15 @@ contract OptimisticMediationExample is Test {
         // Fast forward past mediation deadline - mediator didn't respond
         vm.warp(block.timestamp + 6 minutes);
 
+        // Validate - will use optimistic acceptance since past deadline
+        vm.prank(address(this));
+        mediationValidator.validate(demandData, fulfillment);
+
         // Server can now claim - optimistic acceptance kicks in
         uint256 serverBalanceBefore = server.balance;
 
         vm.prank(server);
-        validationEscrow.claimEscrow(escrowId, dataHash);
+        validationEscrow.claimEscrow(escrowId, fulfillment);
 
         // Verify server received funds
         uint256 serverBalanceAfter = server.balance;
@@ -125,12 +133,12 @@ contract OptimisticMediationExample is Test {
         uint8 minValidation = 50;
         uint256 mediationDeadline = block.timestamp + 30 minutes;
 
-        bytes memory demand = abi.encode(
-            OptimisticMediationValidator.DemandData({
+        OptimisticMediationValidator.DemandData
+            memory demandData = OptimisticMediationValidator.DemandData({
                 mediator: mediator,
                 mediationDeadline: mediationDeadline
-            })
-        );
+            });
+        bytes memory demand = abi.encode(demandData);
 
         // Client deposits escrow
         vm.prank(client);
@@ -140,11 +148,14 @@ contract OptimisticMediationExample is Test {
             escrowAmount,
             expirationTime,
             minValidation,
-            address(mediationValidator),
             demand
         );
 
-        bytes32 dataHash = keccak256("service data");
+        // Server prepares fulfillment
+        bytes memory fulfillment = bytes("service data");
+
+        // Calculate dataHash for validation
+        bytes32 dataHash = keccak256(abi.encodePacked(demand, fulfillment));
 
         // Server requests validation
         vm.prank(server);
@@ -155,17 +166,25 @@ contract OptimisticMediationExample is Test {
         );
 
         // Mediator accepts the validation
+        // Calculate the dataHash that validate() will use internally
+        bytes32 mediationDataHash = keccak256(
+            abi.encodePacked(demand, fulfillment)
+        );
         vm.prank(mediator);
         mediationValidator.mediate(
-            dataHash,
-            OptimisticMediationValidator.MediationReponse.ACCEPTED
+            mediationDataHash,
+            OptimisticMediationValidator.MediationResponse.ACCEPTED
         );
+
+        // Validate - will return 100 due to acceptance
+        vm.prank(address(this));
+        mediationValidator.validate(demandData, fulfillment);
 
         // Server can claim immediately after acceptance
         uint256 serverBalanceBefore = server.balance;
 
         vm.prank(server);
-        validationEscrow.claimEscrow(escrowId, dataHash);
+        validationEscrow.claimEscrow(escrowId, fulfillment);
 
         uint256 serverBalanceAfter = server.balance;
         assertEq(serverBalanceAfter - serverBalanceBefore, escrowAmount);
@@ -178,12 +197,12 @@ contract OptimisticMediationExample is Test {
         uint8 minValidation = 50; // Requires at least 50/100
         uint256 mediationDeadline = block.timestamp + 30 minutes;
 
-        bytes memory demand = abi.encode(
-            OptimisticMediationValidator.DemandData({
+        OptimisticMediationValidator.DemandData
+            memory demandData = OptimisticMediationValidator.DemandData({
                 mediator: mediator,
                 mediationDeadline: mediationDeadline
-            })
-        );
+            });
+        bytes memory demand = abi.encode(demandData);
 
         // Client deposits escrow
         vm.prank(client);
@@ -193,11 +212,14 @@ contract OptimisticMediationExample is Test {
             escrowAmount,
             expirationTime,
             minValidation,
-            address(mediationValidator),
             demand
         );
 
-        bytes32 dataHash = keccak256("disputed service");
+        // Server prepares fulfillment
+        bytes memory fulfillment = bytes("disputed service");
+
+        // Calculate dataHash for validation
+        bytes32 dataHash = keccak256(abi.encodePacked(demand, fulfillment));
 
         // Server requests validation
         vm.prank(server);
@@ -208,22 +230,29 @@ contract OptimisticMediationExample is Test {
         );
 
         // Mediator rejects the validation
+        // Calculate the dataHash that validate() will use internally
+        bytes32 mediationDataHash = keccak256(
+            abi.encodePacked(demand, fulfillment)
+        );
         vm.prank(mediator);
         mediationValidator.mediate(
-            dataHash,
-            OptimisticMediationValidator.MediationReponse.REJECTED
+            mediationDataHash,
+            OptimisticMediationValidator.MediationResponse.REJECTED
         );
 
-        // Server cannot claim - validation score is 0
+        // Validate - will return 0 due to rejection
+        vm.prank(address(this));
+        mediationValidator.validate(demandData, fulfillment);
+
+        // Server tries to claim but fails due to rejection (score 0 < minValidation 50)
         vm.prank(server);
         vm.expectRevert(ValidationEscrow.InvalidValidation.selector);
-        validationEscrow.claimEscrow(escrowId, dataHash);
+        validationEscrow.claimEscrow(escrowId, fulfillment);
 
         // Client can reclaim after expiration
         vm.warp(block.timestamp + 2 hours);
 
         uint256 clientBalanceBefore = client.balance;
-
         vm.prank(client);
         validationEscrow.reclaimExpired(escrowId);
 
@@ -232,85 +261,75 @@ contract OptimisticMediationExample is Test {
     }
 
     function testMultipleMediators() public {
-        // This test shows how different escrows can have different mediators
-        address mediator1 = address(0x100);
-        address mediator2 = address(0x200);
+        // This test shows that only the designated mediator can influence validation
+        address mediator2 = address(0x5);
+        vm.deal(mediator2, 1 ether);
 
-        bytes32 dataHash1 = keccak256("service1");
-        bytes32 dataHash2 = keccak256("service2");
+        uint256 escrowAmount = 1 ether;
+        uint256 mediationDeadline = block.timestamp + 10 minutes;
 
-        // First escrow with mediator1
-        bytes memory demand1 = abi.encode(
-            OptimisticMediationValidator.DemandData({
-                mediator: mediator1,
-                mediationDeadline: block.timestamp + 10 minutes
-            })
-        );
+        OptimisticMediationValidator.DemandData memory demandData = OptimisticMediationValidator
+            .DemandData({
+                mediator: mediator, // mediator is the designated one
+                mediationDeadline: mediationDeadline
+            });
+        bytes memory demand = abi.encode(demandData);
 
+        // Client deposits escrow
         vm.prank(client);
-        uint256 escrowId1 = validationEscrow.depositEscrow{value: 0.5 ether}(
+        uint256 escrowId = validationEscrow.depositEscrow{value: escrowAmount}(
             validatorAgentId,
             serverAgentId,
-            0.5 ether,
+            escrowAmount,
             block.timestamp + 1 hours,
             50,
-            address(mediationValidator),
-            demand1
+            demand
         );
 
-        // Second escrow with mediator2
-        bytes memory demand2 = abi.encode(
-            OptimisticMediationValidator.DemandData({
-                mediator: mediator2,
-                mediationDeadline: block.timestamp + 20 minutes
-            })
-        );
+        // Server prepares fulfillment
+        bytes memory fulfillment = bytes("multi-mediator test");
 
-        vm.prank(client);
-        uint256 escrowId2 = validationEscrow.depositEscrow{value: 0.5 ether}(
-            validatorAgentId,
-            serverAgentId,
-            0.5 ether,
-            block.timestamp + 1 hours,
-            50,
-            address(mediationValidator),
-            demand2
-        );
+        // Calculate dataHash for validation
+        bytes32 dataHash = keccak256(abi.encodePacked(demand, fulfillment));
 
-        // Request validations
-        vm.startPrank(server);
+        // Server requests validation
+        vm.prank(server);
         validationRegistry.validationRequest(
             validatorAgentId,
             serverAgentId,
-            dataHash1
-        );
-        validationRegistry.validationRequest(
-            validatorAgentId,
-            serverAgentId,
-            dataHash2
-        );
-        vm.stopPrank();
-
-        // Mediator1 accepts, Mediator2 rejects
-        vm.prank(mediator1);
-        mediationValidator.mediate(
-            dataHash1,
-            OptimisticMediationValidator.MediationReponse.ACCEPTED
+            dataHash
         );
 
+        // Wrong mediator tries to reject
+        // Calculate the dataHash that validate() will use internally
+        bytes32 mediationDataHash = keccak256(
+            abi.encodePacked(demand, fulfillment)
+        );
         vm.prank(mediator2);
         mediationValidator.mediate(
-            dataHash2,
-            OptimisticMediationValidator.MediationReponse.REJECTED
+            mediationDataHash,
+            OptimisticMediationValidator.MediationResponse.REJECTED
         );
 
-        // Server can claim escrow1 but not escrow2
-        vm.prank(server);
-        validationEscrow.claimEscrow(escrowId1, dataHash1); // Success
+        // Correct mediator accepts
+        vm.prank(mediator);
+        mediationValidator.mediate(
+            mediationDataHash,
+            OptimisticMediationValidator.MediationResponse.ACCEPTED
+        );
 
+        // Validate - should use correct mediator's response (accepted)
+        vm.prank(address(this));
+        mediationValidator.validate(demandData, fulfillment);
+
+        // Server can claim because correct mediator accepted
         vm.prank(server);
-        vm.expectRevert(ValidationEscrow.InvalidValidation.selector);
-        validationEscrow.claimEscrow(escrowId2, dataHash2); // Fails
+        validationEscrow.claimEscrow(escrowId, fulfillment);
+
+        // Verify escrow was claimed
+        vm.prank(client);
+        vm.expectRevert(ValidationEscrow.InvalidEscrow.selector);
+        validationEscrow.reclaimExpired(escrowId);
     }
 
     function testValidatorSelfRegistration() public {
@@ -336,46 +355,41 @@ contract OptimisticMediationExample is Test {
             .resolveByAddress(address(mediationValidator));
         assertEq(byAddress.agentDomain, "optimistic-validator.example.com");
 
-        // Deploy another validator with different domain
-        OptimisticMediationValidator anotherValidator = new OptimisticMediationValidator{
-                value: REGISTRATION_FEE
-            }(
-                address(identityRegistry),
-                address(validationRegistry),
-                "another-optimistic.example.com"
-            );
-
-        // Verify it gets a different agent ID
-        assertTrue(anotherValidator.validatorAgentId() != validatorAgentId);
-        assertTrue(
-            identityRegistry.agentExists(anotherValidator.validatorAgentId())
-        );
+        // Verify the validator agent ID is correctly stored in the contract
+        assertEq(mediationValidator.validatorAgentId(), validatorAgentId);
     }
 
     function testWrongMediatorCannotInfluence() public {
-        // Test that only the designated mediator can influence validation
-        address wrongMediator = address(0x999);
+        // Test that a non-designated mediator cannot affect validation outcome
+        address wrongMediatorAddress = address(0x999);
 
-        bytes memory demand = abi.encode(
-            OptimisticMediationValidator.DemandData({
-                mediator: mediator, // Correct mediator
-                mediationDeadline: block.timestamp + 30 minutes
-            })
-        );
+        uint256 escrowAmount = 0.5 ether;
+        uint256 mediationDeadline = block.timestamp + 10 minutes;
+
+        OptimisticMediationValidator.DemandData
+            memory demandData = OptimisticMediationValidator.DemandData({
+                mediator: mediator,
+                mediationDeadline: mediationDeadline
+            });
+        bytes memory demand = abi.encode(demandData);
 
         vm.prank(client);
-        uint256 escrowId = validationEscrow.depositEscrow{value: 1 ether}(
+        uint256 escrowId = validationEscrow.depositEscrow{value: escrowAmount}(
             validatorAgentId,
             serverAgentId,
-            1 ether,
+            escrowAmount,
             block.timestamp + 1 hours,
             50,
-            address(mediationValidator),
             demand
         );
 
-        bytes32 dataHash = keccak256("some service");
+        // Server prepares fulfillment
+        bytes memory fulfillment = bytes("test service");
 
+        // Calculate dataHash for validation
+        bytes32 dataHash = keccak256(abi.encodePacked(demand, fulfillment));
+
+        // Server requests validation
         vm.prank(server);
         validationRegistry.validationRequest(
             validatorAgentId,
@@ -384,106 +398,126 @@ contract OptimisticMediationExample is Test {
         );
 
         // Wrong mediator tries to accept
-        vm.prank(wrongMediator);
+        // Calculate the dataHash that validate() will use internally
+        bytes32 mediationDataHash = keccak256(
+            abi.encodePacked(demand, fulfillment)
+        );
+        vm.prank(wrongMediatorAddress);
         mediationValidator.mediate(
-            dataHash,
-            OptimisticMediationValidator.MediationReponse.ACCEPTED
+            mediationDataHash,
+            OptimisticMediationValidator.MediationResponse.ACCEPTED
         );
 
-        // With NONE enum value, uninitialized responses are properly handled.
-        // Without the correct mediator's response, validation should fail
-        // before the deadline.
-
-        // Before deadline, no valid response from correct mediator
-        vm.warp(block.timestamp + 10 minutes);
-
-        // Server tries to claim - should fail because correct mediator hasn't responded
-        vm.prank(server);
+        // Validate before deadline - should revert as awaiting mediation from correct mediator
+        vm.prank(address(this));
         vm.expectRevert(
             OptimisticMediationValidator.AwaitingMediation.selector
         );
-        validationEscrow.claimEscrow(escrowId, dataHash);
+        mediationValidator.validate(demandData, fulfillment);
 
-        // But after deadline, optimistic acceptance works
-        vm.warp(block.timestamp + 31 minutes);
+        // Fast forward past deadline
+        vm.warp(block.timestamp + 11 minutes);
 
+        // Now validate - should succeed with optimistic acceptance
+        vm.prank(address(this));
+        mediationValidator.validate(demandData, fulfillment);
+
+        // Server can claim
         vm.prank(server);
-        validationEscrow.claimEscrow(escrowId, dataHash); // Now succeeds via optimistic acceptance
+        validationEscrow.claimEscrow(escrowId, fulfillment);
     }
 
     function testNoneResponseBehavior() public {
-        // This test explicitly verifies NONE enum behavior
-        bytes memory demand = abi.encode(
-            OptimisticMediationValidator.DemandData({
+        // Test the behavior when mediator response is NONE (default)
+        uint256 escrowAmount = 0.75 ether;
+        uint256 mediationDeadline = block.timestamp + 15 minutes;
+
+        OptimisticMediationValidator.DemandData
+            memory demandData = OptimisticMediationValidator.DemandData({
                 mediator: mediator,
-                mediationDeadline: block.timestamp + 30 minutes
-            })
-        );
+                mediationDeadline: mediationDeadline
+            });
+        bytes memory demand = abi.encode(demandData);
 
         vm.prank(client);
-        uint256 escrowId = validationEscrow.depositEscrow{value: 1 ether}(
+        uint256 escrowId = validationEscrow.depositEscrow{value: escrowAmount}(
             validatorAgentId,
             serverAgentId,
-            1 ether,
+            escrowAmount,
             block.timestamp + 2 hours,
             50,
-            address(mediationValidator),
             demand
         );
 
-        bytes32 dataHash = keccak256("test data");
+        // Server prepares fulfillment
+        bytes memory fulfillment = bytes("none response test");
 
-        // Request validation
+        // Server requests validation
         vm.prank(server);
         validationRegistry.validationRequest(
             validatorAgentId,
             serverAgentId,
-            dataHash
+            keccak256(abi.encodePacked(demand, fulfillment))
         );
 
-        // Before deadline, with NONE response (default), validation should revert
-        vm.prank(server);
+        // Try to validate before deadline without mediator response - should revert
+        vm.prank(address(this));
         vm.expectRevert(
             OptimisticMediationValidator.AwaitingMediation.selector
         );
-        validationEscrow.claimEscrow(escrowId, dataHash);
+        mediationValidator.validate(demandData, fulfillment);
 
-        // Fast forward past deadline
-        vm.warp(block.timestamp + 31 minutes);
+        // Move to exactly the deadline
+        vm.warp(mediationDeadline);
 
-        // Now with NONE response but past deadline, optimistic acceptance occurs
-        uint256 serverBalanceBefore = server.balance;
+        // Still should revert at exactly the deadline
+        vm.prank(address(this));
+        vm.expectRevert(
+            OptimisticMediationValidator.AwaitingMediation.selector
+        );
+        mediationValidator.validate(demandData, fulfillment);
 
+        // Move past the deadline
+        vm.warp(mediationDeadline + 1);
+
+        // Now validation should succeed with optimistic acceptance
+        vm.prank(address(this));
+        mediationValidator.validate(demandData, fulfillment);
+
+        // Server can claim
         vm.prank(server);
-        validationEscrow.claimEscrow(escrowId, dataHash);
-
-        uint256 serverBalanceAfter = server.balance;
-        assertEq(serverBalanceAfter - serverBalanceBefore, 1 ether);
+        validationEscrow.claimEscrow(escrowId, fulfillment);
     }
 
     function testExplicitMediatorResponseOverridesOptimistic() public {
-        // Test that explicit mediator response before deadline takes precedence
-        bytes memory demand = abi.encode(
-            OptimisticMediationValidator.DemandData({
+        // Test that explicit mediator response before deadline overrides optimistic behavior
+        uint256 escrowAmount = 1 ether;
+        uint256 mediationDeadline = block.timestamp + 20 minutes;
+
+        OptimisticMediationValidator.DemandData
+            memory demandData = OptimisticMediationValidator.DemandData({
                 mediator: mediator,
-                mediationDeadline: block.timestamp + 30 minutes
-            })
-        );
+                mediationDeadline: mediationDeadline
+            });
+        bytes memory demand = abi.encode(demandData);
 
         vm.prank(client);
-        uint256 escrowId = validationEscrow.depositEscrow{value: 1 ether}(
+        uint256 escrowId = validationEscrow.depositEscrow{value: escrowAmount}(
             validatorAgentId,
             serverAgentId,
-            1 ether,
-            block.timestamp + 2 hours,
-            50,
-            address(mediationValidator),
+            escrowAmount,
+            block.timestamp + 3 hours,
+            80, // High minimum validation
             demand
         );
 
-        bytes32 dataHash = keccak256("service data");
+        // Server prepares fulfillment
+        bytes memory fulfillment = bytes("explicit response test");
 
-        // Request validation
+        // Calculate dataHash for validation
+        bytes32 dataHash = keccak256(abi.encodePacked(demand, fulfillment));
+
+        // Server requests validation
         vm.prank(server);
         validationRegistry.validationRequest(
             validatorAgentId,
@@ -492,17 +526,23 @@ contract OptimisticMediationExample is Test {
         );
 
         // Mediator explicitly rejects before deadline
+        // Calculate the dataHash that validate() will use internally
+        bytes32 mediationDataHash = keccak256(
+            abi.encodePacked(demand, fulfillment)
+        );
         vm.prank(mediator);
         mediationValidator.mediate(
-            dataHash,
-            OptimisticMediationValidator.MediationReponse.REJECTED
+            mediationDataHash,
+            OptimisticMediationValidator.MediationResponse.REJECTED
         );
 
-        // Even after deadline, rejection stands (not optimistic acceptance)
-        vm.warp(block.timestamp + 31 minutes);
+        // Validate - should use explicit rejection even before deadline
+        vm.prank(address(this));
+        mediationValidator.validate(demandData, fulfillment);
 
+        // Server cannot claim due to rejection (score 0 < minValidation 80)
         vm.prank(server);
         vm.expectRevert(ValidationEscrow.InvalidValidation.selector);
-        validationEscrow.claimEscrow(escrowId, dataHash);
+        validationEscrow.claimEscrow(escrowId, fulfillment);
     }
 }

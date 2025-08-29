@@ -3,12 +3,16 @@ pragma solidity ^0.8.19;
 
 import "../interfaces/IValidationRegistry.sol";
 import "../interfaces/IIdentityRegistry.sol";
-import "../interfaces/IValidator.sol";
 
-contract OnchainCheckValidator is IValidator {
-    // DemandData could be anything. in this example, we check that keccak256(data) == dataHash
+contract OnchainCheckValidator {
+    // DemandData and FulfillmentData could be anything. in this example, we check that a + b == sum
     struct DemandData {
-        bytes data;
+        uint256 a;
+        uint256 b;
+    }
+
+    struct FulfillmentData {
+        uint256 sum;
     }
 
     IIdentityRegistry public immutable identityRegistry;
@@ -43,23 +47,29 @@ contract OnchainCheckValidator is IValidator {
     }
 
     function _onchainCheck(
-        bytes32 dataHash,
-        DemandData memory demand
+        DemandData memory demand,
+        FulfillmentData memory fulfillment
     ) internal pure returns (uint8) {
-        // this could represent any on-chain computation on (demand, fulfillment dataHash)
-        // in this example, we just check that keccak256(demand.data) == dataHash
-        if (keccak256(demand.data) != dataHash) {
-            return 0;
+        // this could represent any on-chain computation on fulfillment, demand)
+        // in this example, we check that demand.a + demand.b == fulfillment.sum
+        if (fulfillment.sum == demand.a + demand.b) {
+            return 100;
         }
-        return 100;
+        return 0;
     }
 
-    function validate(bytes32 dataHash, bytes memory demand) external {
-        DemandData memory demandData = abi.decode(demand, (DemandData));
+    function validate(
+        DemandData memory demand,
+        FulfillmentData memory fulfillment
+    ) external returns (uint8 response) {
+        response = _onchainCheck(demand, fulfillment);
 
-        validationRegistry.validationResponse(
-            dataHash,
-            _onchainCheck(dataHash, demandData)
+        bytes memory demandBytes = abi.encode(demand);
+        bytes memory fulfillmentBytes = abi.encode(fulfillment);
+        bytes32 dataHash = keccak256(
+            abi.encodePacked(demandBytes, fulfillmentBytes)
         );
+
+        validationRegistry.validationResponse(dataHash, response);
     }
 }

@@ -3,15 +3,14 @@ pragma solidity ^0.8.19;
 
 import "../interfaces/IValidationRegistry.sol";
 import "../interfaces/IIdentityRegistry.sol";
-import "../interfaces/IValidator.sol";
 
-contract OptimisticMediationValidator is IValidator {
+contract OptimisticMediationValidator {
     struct DemandData {
         address mediator;
         uint256 mediationDeadline;
     }
 
-    enum MediationReponse {
+    enum MediationResponse {
         NONE,
         ACCEPTED,
         REJECTED
@@ -20,16 +19,14 @@ contract OptimisticMediationValidator is IValidator {
     error AwaitingMediation();
 
     event MediationRequested(
-        bytes32 dataHash,
         address mediator,
-        uint256 mediationDeadline
+        uint256 mediationDeadline,
+        bytes demand,
+        bytes fulfillment
     );
 
-    mapping(address => mapping(bytes32 => MediationReponse)) private _responses;
-
-    function mediate(bytes32 dataHash, MediationReponse response) external {
-        _responses[msg.sender][dataHash] = response;
-    }
+    mapping(address => mapping(bytes32 => MediationResponse))
+        private _responses;
 
     mapping(address => mapping(bytes32 => uint8)) private _mediations;
 
@@ -65,32 +62,51 @@ contract OptimisticMediationValidator is IValidator {
     }
 
     function requestMediation(
-        bytes32 dataHash,
+        bytes memory demand,
+        bytes memory fulfillment,
         address mediator,
         uint256 mediationDeadline
     ) external {
-        emit MediationRequested(dataHash, mediator, mediationDeadline);
+        emit MediationRequested(
+            mediator,
+            mediationDeadline,
+            demand,
+            fulfillment
+        );
     }
 
-    function validate(bytes32 dataHash, bytes memory demand) external {
-        DemandData memory demandData = abi.decode(demand, (DemandData));
+    function mediate(
+        bytes32 dataHash, // keccak256(abi.encodePacked(demand, fulfillment))
+        MediationResponse response
+    ) external {
+        _responses[msg.sender][dataHash] = response;
+    }
 
-        MediationReponse response = _responses[demandData.mediator][dataHash];
+    function validate(
+        DemandData memory demand,
+        bytes memory fulfillment
+    ) external {
+        bytes memory demandBytes = abi.encode(demand);
+        bytes32 dataHash = keccak256(
+            abi.encodePacked(demandBytes, fulfillment)
+        );
 
-        if (response == MediationReponse.ACCEPTED) {
+        MediationResponse response = _responses[demand.mediator][dataHash];
+
+        if (response == MediationResponse.ACCEPTED) {
             validationRegistry.validationResponse(dataHash, 100);
             return;
         }
 
-        if (response == MediationReponse.REJECTED) {
+        if (response == MediationResponse.REJECTED) {
             validationRegistry.validationResponse(dataHash, 0);
             return;
         }
 
         // If no response (NONE) and past deadline, optimistic acceptance
         if (
-            response == MediationReponse.NONE &&
-            block.timestamp > demandData.mediationDeadline
+            response == MediationResponse.NONE &&
+            block.timestamp > demand.mediationDeadline
         ) {
             // optimistic mediation: accept by default
             validationRegistry.validationResponse(dataHash, 100);
