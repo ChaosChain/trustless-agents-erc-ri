@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERC-8004 Trustless Agents Registry</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .card-header h2 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .card-body {
+            padding: 40px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #374151;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+        }
+
+        .network-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .network-option {
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .network-option:hover {
+            border-color: #4f46e5;
+            background-color: #f8fafc;
+        }
+
+        .network-option.selected {
+            border-color: #4f46e5;
+            background-color: #eef2ff;
+        }
+
+        .network-option .network-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .network-option .network-chain {
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .status.success {
+            background-color: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+
+        .status.error {
+            background-color: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+
+        .status.loading {
+            background-color: #dbeafe;
+            border: 1px solid #3b82f6;
+            color: #1e40af;
+        }
+
+        .wallet-info {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .wallet-info.connected {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+        }
+
+        .contracts-info {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-top: 30px;
+        }
+
+        .contracts-info h3 {
+            color: #4f46e5;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .contract-address {
+            background: #f8fafc;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            opacity: 0.8;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .card-body {
+                padding: 20px;
+            }
+            
+            .network-selector {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-robot"></i> ERC-8004 Trustless Agents</h1>
+            <p>Register your agent on the decentralized agent economy</p>
+        </div>
+
+        <div class="main-card">
+            <div class="card-header">
+                <h2><i class="fas fa-user-plus"></i> Agent Registration</h2>
+                <p>First working implementation of ERC-8004 standard</p>
+            </div>
+            <div class="card-body">
+                <div class="wallet-info" id="walletInfo">
+                    <i class="fas fa-wallet"></i>
+                    <span id="walletStatus">Connect your wallet to register an agent</span>
+                    <button class="btn" id="connectWallet" style="width: auto; margin-top: 10px;">
+                        Connect Wallet
+                    </button>
+                </div>
+
+                <form id="registrationForm" style="display: none;">
+                    <div class="form-group">
+                        <label for="agentDomain">
+                            <i class="fas fa-globe"></i> Agent Domain
+                        </label>
+                        <input 
+                            type="text" 
+                            id="agentDomain" 
+                            placeholder="example.com" 
+                            required
+                        >
+                        <small style="color: #6b7280; margin-top: 5px; display: block;">
+                            Your agent card must be available at https://yourdomain.com/.well-known/agent-card.json
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="agentAddress">
+                            <i class="fas fa-key"></i> Agent Address
+                        </label>
+                        <input 
+                            type="text" 
+                            id="agentAddress" 
+                            placeholder="0x..." 
+                            required
+                        >
+                        <small style="color: #6b7280; margin-top: 5px; display: block;">
+                            EVM-compatible address that will control this agent
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label><i class="fas fa-network-wired"></i> Select Network</label>
+                        <div class="network-selector" id="networkSelector">
+                            <!-- Networks will be populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn" id="registerBtn">
+                        <i class="fas fa-rocket"></i> Register Agent
+                    </button>
+                </form>
+
+                <div class="status" id="status"></div>
+            </div>
+        </div>
+
+        <div class="contracts-info" id="contractsInfo" style="display: none;">
+            <h3><i class="fas fa-file-contract"></i> Contract Addresses</h3>
+            <div id="contractAddresses"></div>
+        </div>
+
+        <div class="footer">
+            <p>
+                <i class="fas fa-code"></i> 
+                Open source reference implementation | 
+                <a href="https://github.com/ChaosChain/trustless-agents-erc-ri" target="_blank">
+                    <i class="fab fa-github"></i> GitHub
+                </a> | 
+                <a href="https://ethereum-magicians.org/t/erc-8004-trustless-agents/25098" target="_blank">
+                    <i class="fas fa-comments"></i> ERC Discussion
+                </a>
+            </p>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script src="config.js"></script>
+</body>
+</html>
