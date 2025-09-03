@@ -4,7 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERC-8004 Trustless Agents Registry</title>
-    <script src="https://cdn.ethers.io/lib/ethers-5.7.2.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script>
+        // Fallback CDN if primary fails
+        if (typeof ethers === 'undefined') {
+            document.write('<script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"><\/script>');
+        }
+    </script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
@@ -311,6 +317,26 @@
                     </button>
                 </form>
 
+                <!-- Lookup Section -->
+                <div class="lookup-section" id="lookupSection" style="display: none; margin-top: 30px; padding-top: 30px; border-top: 2px solid #e5e7eb;">
+                    <h3 style="text-align: center; color: #4f46e5; margin-bottom: 20px;">
+                        <i class="fas fa-search"></i> Lookup Agent
+                    </h3>
+                    <div class="form-group">
+                        <label for="lookupDomain">
+                            <i class="fas fa-globe"></i> Search by Domain
+                        </label>
+                        <input 
+                            type="text" 
+                            id="lookupDomain" 
+                            placeholder="example.com"
+                        >
+                    </div>
+                    <button type="button" class="btn" id="lookupBtn" style="background: linear-gradient(135deg, #059669 0%, #047857 100%);">
+                        <i class="fas fa-search"></i> Lookup Agent
+                    </button>
+                </div>
+
                 <div class="status" id="status"></div>
             </div>
         </div>
@@ -334,7 +360,7 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
     <script src="config.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

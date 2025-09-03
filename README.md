@@ -2,7 +2,7 @@
 
 A modern, responsive web interface for registering agents on the ERC-8004 Trustless Agents protocol.
 
-## 🌟 Features
+## Features
 
 - **Multi-Network Support**: Ethereum, Base, Arbitrum, and Optimism Sepolia testnets
 - **Wallet Integration**: MetaMask and other Web3 wallets
@@ -11,7 +11,7 @@ A modern, responsive web interface for registering agents on the ERC-8004 Trustl
 - **Mobile Responsive**: Works on desktop and mobile devices
 - **Transaction Tracking**: Links to block explorers for verification
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Local Development
 
@@ -85,7 +85,7 @@ Supports four Sepolia testnets with automatic RPC configuration:
 | Arbitrum Sepolia | 421614 | sepolia.arbiscan.io |
 | Optimism Sepolia | 11155420 | sepolia-optimistic.etherscan.io |
 
-## 🎨 Customization
+## Customization
 
 ### Styling
 
@@ -121,14 +121,14 @@ this.networks = {
 };
 ```
 
-## 🔒 Security
+## Security
 
 - **Client-Side Only**: No server-side components or data storage
 - **Wallet Security**: Uses standard Web3 wallet security practices
 - **Input Validation**: Validates addresses and domains before submission
 - **Network Verification**: Confirms network before transactions
 
-## 📦 Deployment
+## Deployment
 
 ### Static Hosting
 
@@ -157,7 +157,7 @@ For production deployment:
 3. Enable HTTPS (most hosts do this automatically)
 4. Update any hardcoded URLs to use your domain
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -175,7 +175,7 @@ const DEBUG = true;
 if (DEBUG) console.log('Debug info:', data);
 ```
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -183,7 +183,7 @@ if (DEBUG) console.log('Debug info:', data);
 4. Test on multiple networks
 5. Submit a pull request
 
-## 📄 License
+## License
 
 MIT License - see the main repository for details.
 
