@@ -96,6 +96,7 @@ contract IdentityRegistry is ERC721URIStorage, ReentrancyGuard, IIdentityRegistr
         string calldata key, 
         bytes calldata value
     ) external {
+        require(_exists(agentId), "Agent does not exist");
         require(_isApprovedOrOwner(msg.sender, agentId), "Not authorized");
         require(bytes(key).length > 0, "Empty key");
         
@@ -170,6 +171,7 @@ contract IdentityRegistry is ERC721URIStorage, ReentrancyGuard, IIdentityRegistr
         uint256 agentId, 
         MetadataEntry[] calldata metadata
     ) internal {
+        require(_exists(agentId), "Agent does not exist");
         for (uint256 i = 0; i < metadata.length; i++) {
             require(bytes(metadata[i].key).length > 0, "Empty key");
             _metadata[agentId][metadata[i].key] = metadata[i].value;
