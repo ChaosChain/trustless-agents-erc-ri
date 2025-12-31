@@ -181,4 +181,13 @@ contract IdentityRegistry is ERC721URIStorage, ReentrancyGuard, IIdentityRegistr
             );
         }
     }
+
+    function supportsInterface(bytes4 interfaceId)
+    public
+    view
+    override(ERC721, IERC165)
+    returns (bool)
+{
+    return interfaceId == type(IIdentityRegistry).interfaceId || super.supportsInterface(interfaceId);
+}
 }

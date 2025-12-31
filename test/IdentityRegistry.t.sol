@@ -272,7 +272,7 @@ contract IdentityRegistryTest is Test {
         assertFalse(registry.agentExists(999), "Agent 999 should not exist");
     }
     
-    function test_SupportsInterface_ERC721() public {
+    function test_SupportsInterface_ERC721() public view {
         // ERC721
         assertTrue(registry.supportsInterface(0x80ac58cd));
         // ERC721Metadata
@@ -281,7 +281,7 @@ contract IdentityRegistryTest is Test {
         assertTrue(registry.supportsInterface(0x01ffc9a7));
     }
     
-    function test_Name_AndSymbol() public {
+    function test_Name_AndSymbol() public view{
         assertEq(registry.name(), "ERC-8004 Trustless Agent");
         assertEq(registry.symbol(), "AGENT");
     }
