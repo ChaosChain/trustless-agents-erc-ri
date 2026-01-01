@@ -202,6 +202,8 @@ contract ReputationRegistry is IReputationRegistry {
      * @param feedbackIndex The feedback index to revoke
      */
     function revokeFeedback(uint256 agentId, uint64 feedbackIndex) external {
+        require(identityRegistry.agentExists(agentId), "Agent does not exist");
+
         require(feedbackIndex > 0 && feedbackIndex <= _lastIndex[agentId][msg.sender], "Invalid index");
         require(!_feedback[agentId][msg.sender][feedbackIndex].isRevoked, "Already revoked");
         
@@ -225,6 +227,8 @@ contract ReputationRegistry is IReputationRegistry {
         string calldata responseUri,
         bytes32 responseHash
     ) external {
+        require(identityRegistry.agentExists(agentId), "Agent does not exist");
+
         require(feedbackIndex > 0 && feedbackIndex <= _lastIndex[agentId][clientAddress], "Invalid index");
         require(bytes(responseUri).length > 0, "Empty URI");
         
@@ -256,6 +260,8 @@ contract ReputationRegistry is IReputationRegistry {
         bytes32 tag1,
         bytes32 tag2
     ) external view returns (uint64 count, uint8 averageScore) {
+        require(identityRegistry.agentExists(agentId), "Agent does not exist");
+
         address[] memory clients;
         if (clientAddresses.length > 0) {
             clients = clientAddresses;
@@ -308,6 +314,8 @@ contract ReputationRegistry is IReputationRegistry {
         bytes32 tag2,
         bool isRevoked
     ) {
+        require(identityRegistry.agentExists(agentId), "Agent does not exist");
+
         require(index > 0 && index <= _lastIndex[agentId][clientAddress], "Invalid index");
         Feedback storage fb = _feedback[agentId][clientAddress][index];
         return (fb.score, fb.tag1, fb.tag2, fb.isRevoked);
@@ -343,6 +351,8 @@ contract ReputationRegistry is IReputationRegistry {
         bytes32[] memory tag2s,
         bool[] memory revokedStatuses
     ) {
+        require(identityRegistry.agentExists(agentId), "Agent does not exist");
+
         address[] memory clientList;
         if (clientAddresses.length > 0) {
             clientList = clientAddresses;
@@ -450,6 +460,7 @@ contract ReputationRegistry is IReputationRegistry {
         uint64 feedbackIndex,
         address[] calldata responders
     ) external view returns (uint64 count) {
+        require(identityRegistry.agentExists(agentId), "Agent does not exist");
         // Early return if no responders specified (known limitation)
         if (responders.length == 0) {
             return 0;
@@ -488,6 +499,7 @@ contract ReputationRegistry is IReputationRegistry {
      * @return clientList Array of client addresses
      */
     function getClients(uint256 agentId) external view returns (address[] memory clientList) {
+        require(identityRegistry.agentExists(agentId), "Agent does not exist");
         return _clients[agentId];
     }
     
@@ -498,6 +510,8 @@ contract ReputationRegistry is IReputationRegistry {
      * @return lastIndex The last feedback index
      */
     function getLastIndex(uint256 agentId, address clientAddress) external view returns (uint64 lastIndex) {
+        require(identityRegistry.agentExists(agentId), "Agent does not exist");
+
         return _lastIndex[agentId][clientAddress];
     }
     
