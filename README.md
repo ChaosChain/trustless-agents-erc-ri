@@ -217,7 +217,7 @@ contract ReputationRegistry {
         address clientAddress,
         uint64 feedbackIndex,
         string responseURI,
-        bytes32 responseHash      // Not emitted in event (as per spec)
+        bytes32 responseHash
     ) external;
     
     // Read functions

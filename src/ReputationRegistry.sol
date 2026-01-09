@@ -154,7 +154,7 @@ contract ReputationRegistry is IReputationRegistry {
         // Increment response count for this responder
         _responseCount[agentId][clientAddress][feedbackIndex][msg.sender]++;
         
-        emit ResponseAppended(agentId, clientAddress, feedbackIndex, msg.sender, responseURI);
+        emit ResponseAppended(agentId, clientAddress, feedbackIndex, msg.sender, responseURI, responseHash);
     }
 
     // ============ Read Functions ============
