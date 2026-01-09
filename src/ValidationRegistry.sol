@@ -6,24 +6,26 @@ import "./interfaces/IValidationRegistry.sol";
 
 /**
  * @title ValidationRegistry
- * @dev ERC-8004 v1.0 Validation Registry - Reference Implementation
+ * @dev ERC-8004 Validation Registry - Reference Implementation (Jan 2026 Update)
  * @notice Generic hooks for requesting and recording independent validation
  * 
- * This contract implements the Validation Registry as specified in ERC-8004 v1.0.
+ * ⚠️ WARNING: This section is still under active updates with the TEE community.
+ * Expect further changes later in 2026. Consider this EXPERIMENTAL.
+ * 
+ * This contract implements the Validation Registry as specified in ERC-8004 (Jan 2026 Update).
  * It enables agents to request verification of their work and allows validator
  * smart contracts to provide responses that can be tracked on-chain.
  * 
- * Key Features:
- * - Validation requests with URI and hash commitments
- * - Multiple responses per request (progressive validation)
- * - Tag-based categorization
- * - On-chain aggregation for composability
+ * Key Changes in Jan 2026 Update:
+ * - ✅ NEW: String tags instead of bytes32 (more flexible, human-readable)
+ * - ✅ NEW: Consistent URI naming (requestURI, responseURI)
+ * - ✅ NEW: requestHash is now mandatory (commitment to request payload)
  * - Support for various validation methods (stake-secured, zkML, TEE)
  * 
  * @author ChaosChain Labs
  */
 contract ValidationRegistry is IValidationRegistry {
-    
+
     // ============ State Variables ============
     
     /// @dev Reference to the IdentityRegistry
@@ -33,7 +35,7 @@ contract ValidationRegistry is IValidationRegistry {
     struct Request {
         address validatorAddress;
         uint256 agentId;
-        string requestUri;
+        string requestURI;
         bytes32 requestHash;
         uint256 timestamp;
     }
@@ -43,7 +45,7 @@ contract ValidationRegistry is IValidationRegistry {
         address validatorAddress;
         uint256 agentId;
         uint8 response;
-        bytes32 tag;
+        string tag;
         uint256 lastUpdate;
     }
     
@@ -80,18 +82,19 @@ contract ValidationRegistry is IValidationRegistry {
      * @dev Must be called by the owner or operator of the agent
      * @param validatorAddress The address of the validator (can be EOA or contract)
      * @param agentId The agent requesting validation
-     * @param requestUri URI pointing to off-chain validation data
-     * @param requestHash KECCAK-256 hash of request data (optional for IPFS)
+     * @param requestURI URI pointing to off-chain validation data
+     * @param requestHash KECCAK-256 hash of request payload (mandatory)
      */
     function validationRequest(
         address validatorAddress,
         uint256 agentId,
-        string calldata requestUri,
+        string calldata requestURI,
         bytes32 requestHash
     ) external {
         // Validate inputs
         require(validatorAddress != address(0), "Invalid validator address");
-        require(bytes(requestUri).length > 0, "Empty request URI");
+        require(bytes(requestURI).length > 0, "Empty request URI");
+        require(requestHash != bytes32(0), "Request hash required");
         require(identityRegistry.agentExists(agentId), "Agent does not exist");
         
         // Verify caller is owner or approved operator
@@ -104,41 +107,29 @@ contract ValidationRegistry is IValidationRegistry {
         );
         
         // SECURITY: Prevent self-validation (defeats purpose of independent validation)
-        // As per ERC-8004 v1.0 intent: "independent validators checks"
+        // As per ERC-8004 (Jan 2026 Update) intent: "independent validators checks"
         require(validatorAddress != agentOwner, "Self-validation not allowed");
         require(validatorAddress != msg.sender, "Self-validation not allowed");
         
-        // Generate requestHash if not provided (for non-IPFS URIs)
-        bytes32 finalRequestHash = requestHash;
-        if (finalRequestHash == bytes32(0)) {
-            finalRequestHash = keccak256(abi.encodePacked(
-                validatorAddress,
-                agentId,
-                requestUri,
-                block.timestamp,
-                msg.sender
-            ));
-        }
-        
         // SECURITY: Prevent requestHash hijacking
         // Once a request exists, it cannot be overwritten
-        require(!_requestExists[finalRequestHash], "Request hash already exists");
+        require(!_requestExists[requestHash], "Request hash already exists");
         
         // Store request
-        _requests[finalRequestHash] = Request({
+        _requests[requestHash] = Request({
             validatorAddress: validatorAddress,
             agentId: agentId,
-            requestUri: requestUri,
-            requestHash: finalRequestHash,
+            requestURI: requestURI,
+            requestHash: requestHash,
             timestamp: block.timestamp
         });
         
         // Add to tracking arrays
-        _agentValidations[agentId].push(finalRequestHash);
-        _validatorRequests[validatorAddress].push(finalRequestHash);
-        _requestExists[finalRequestHash] = true;
+        _agentValidations[agentId].push(requestHash);
+        _validatorRequests[validatorAddress].push(requestHash);
+        _requestExists[requestHash] = true;
         
-        emit ValidationRequest(validatorAddress, agentId, requestUri, finalRequestHash);
+        emit ValidationRequest(validatorAddress, agentId, requestURI, requestHash);
     }
     
     /**
@@ -147,16 +138,16 @@ contract ValidationRegistry is IValidationRegistry {
      * @dev Can be called multiple times for progressive validation states
      * @param requestHash The hash of the validation request
      * @param response The validation result (0-100)
-     * @param responseUri URI pointing to validation evidence (optional)
+     * @param responseURI URI pointing to validation evidence (optional)
      * @param responseHash KECCAK-256 hash of response data (optional for IPFS)
      * @param tag Custom tag for categorization (optional)
      */
     function validationResponse(
         bytes32 requestHash,
         uint8 response,
-        string calldata responseUri,
+        string calldata responseURI,
         bytes32 responseHash,
-        bytes32 tag
+        string calldata tag
     ) external {
         // Validate response range
         require(response <= 100, "Response must be 0-100");
@@ -182,7 +173,7 @@ contract ValidationRegistry is IValidationRegistry {
             request.agentId,
             requestHash,
             response,
-            responseUri,
+            responseURI,
             responseHash,
             tag
         );
@@ -192,20 +183,20 @@ contract ValidationRegistry is IValidationRegistry {
     
     /**
      * @notice Get validation status for a request
-     * @dev Returns default values (address(0), 0, 0, 0, 0) for pending requests without responses
-     * @dev To distinguish pending from non-existent requests, check if request exists via _requestExists
+     * @dev Returns default values (address(0), 0, 0, "", 0) for pending requests without responses
+     * @dev To distinguish pending from non-existent requests, check if request exists via requestExists()
      * @param requestHash The request hash
      * @return validatorAddress The validator address (address(0) if no response yet)
      * @return agentId The agent ID (0 if no response yet)
      * @return response The validation response (0-100, or 0 if no response yet)
-     * @return tag The response tag (bytes32(0) if no response yet)
+     * @return tag The response tag ("" if no response yet)
      * @return lastUpdate Timestamp of last update (0 if no response yet)
      */
     function getValidationStatus(bytes32 requestHash) external view returns (
         address validatorAddress,
         uint256 agentId,
         uint8 response,
-        bytes32 tag,
+        string memory tag,
         uint256 lastUpdate
     ) {
         Response storage resp = _responses[requestHash];
@@ -229,22 +220,23 @@ contract ValidationRegistry is IValidationRegistry {
      * @dev IMPORTANT: This function is designed for OFF-CHAIN consumption.
      *      For agents with many validation requests, calling without filters may exceed gas limits.
      *      Use the `validatorAddresses` and/or `tag` filters for popular agents to prevent DoS.
-     *      As per ERC-8004 v1.0 spec: validation aggregation is expected to happen off-chain.
+     *      As per ERC-8004 (Jan 2026 Update): validation aggregation is expected to happen off-chain.
      * @param agentId The agent ID (mandatory)
      * @param validatorAddresses Filter by validators (RECOMMENDED for popular agents)
-     * @param tag Filter by tag (optional, bytes32(0) to skip)
+     * @param tag Filter by tag (optional, empty string to skip)
      * @return count Number of validations
-     * @return avgResponse Average response value (0-100)
+     * @return averageResponse Average response value (0-100)
      */
     function getSummary(
         uint256 agentId,
         address[] calldata validatorAddresses,
-        bytes32 tag
-    ) external view returns (uint64 count, uint8 avgResponse) {
+        string calldata tag
+    ) external view returns (uint64 count, uint8 averageResponse) {
         bytes32[] memory requestHashes = _agentValidations[agentId];
         
         uint256 totalResponse = 0;
         uint64 validCount = 0;
+        bool filterTag = bytes(tag).length > 0;
         
         for (uint256 i = 0; i < requestHashes.length; i++) {
             Response storage resp = _responses[requestHashes[i]];
@@ -265,14 +257,14 @@ contract ValidationRegistry is IValidationRegistry {
             }
             
             // Apply tag filter
-            if (tag != bytes32(0) && resp.tag != tag) continue;
+            if (filterTag && keccak256(bytes(resp.tag)) != keccak256(bytes(tag))) continue;
             
             totalResponse += resp.response;
             validCount++;
         }
         
         count = validCount;
-        avgResponse = validCount > 0 ? uint8(totalResponse / validCount) : 0;
+        averageResponse = validCount > 0 ? uint8(totalResponse / validCount) : 0;
     }
     
     /**
@@ -307,13 +299,13 @@ contract ValidationRegistry is IValidationRegistry {
      * @param requestHash The request hash
      * @return validatorAddress The validator address
      * @return agentId The agent ID
-     * @return requestUri The request URI
+     * @return requestURI The request URI
      * @return timestamp The request timestamp
      */
     function getRequest(bytes32 requestHash) external view returns (
         address validatorAddress,
         uint256 agentId,
-        string memory requestUri,
+        string memory requestURI,
         uint256 timestamp
     ) {
         Request storage request = _requests[requestHash];
@@ -322,7 +314,7 @@ contract ValidationRegistry is IValidationRegistry {
         return (
             request.validatorAddress,
             request.agentId,
-            request.requestUri,
+            request.requestURI,
             request.timestamp
         );
     }

@@ -3,12 +3,14 @@ pragma solidity 0.8.19;
 
 /**
  * @title IReputationRegistry
- * @dev Interface for ERC-8004 v1.0 Reputation Registry
- * @notice On-chain feedback system with cryptographic authorization
+ * @dev Interface for ERC-8004 Reputation Registry (Jan 2026 Update)
+ * @notice On-chain feedback system - NO PRE-AUTHORIZATION REQUIRED
  * 
  * This interface provides a standard for posting and fetching feedback signals
- * with on-chain storage and aggregation capabilities. It uses cryptographic
- * signatures (EIP-191/ERC-1271) to authorize feedback submissions.
+ * with on-chain storage and aggregation capabilities. In the Jan 2026 update,
+ * the feedbackAuth mechanism has been removed - any client can directly submit
+ * feedback. Spam and Sybil resistance is handled through off-chain filtering
+ * and reputation systems.
  * 
  * @author ChaosChain Labs
  */
@@ -22,11 +24,13 @@ interface IReputationRegistry {
     event NewFeedback(
         uint256 indexed agentId,
         address indexed clientAddress,
+        uint64 feedbackIndex,
         uint8 score,
-        bytes32 indexed tag1,
-        bytes32 tag2,
-        string fileuri,
-        bytes32 filehash
+        string indexed tag1,
+        string tag2,
+        string endpoint,
+        string feedbackURI,
+        bytes32 feedbackHash
     );
     
     /**
@@ -46,30 +50,30 @@ interface IReputationRegistry {
         address indexed clientAddress,
         uint64 feedbackIndex,
         address indexed responder,
-        string responseUri,
-        bytes32 responseHash
+        string responseURI
     );
 
     // ============ Core Functions ============
     
     /**
      * @notice Give feedback for an agent
+     * @dev No pre-authorization required in v2.0 - direct submission
      * @param agentId The agent receiving feedback
      * @param score The feedback score (0-100)
      * @param tag1 First tag for categorization (optional)
      * @param tag2 Second tag for categorization (optional)
-     * @param fileuri URI pointing to off-chain feedback data (optional)
-     * @param filehash KECCAK-256 hash of the file content (optional for IPFS)
-     * @param feedbackAuth Signed authorization from the agent
+     * @param endpoint The endpoint that was used (optional)
+     * @param feedbackURI URI pointing to off-chain feedback data (optional)
+     * @param feedbackHash KECCAK-256 hash of the file content (optional for IPFS)
      */
     function giveFeedback(
         uint256 agentId,
         uint8 score,
-        bytes32 tag1,
-        bytes32 tag2,
-        string calldata fileuri,
-        bytes32 filehash,
-        bytes memory feedbackAuth
+        string calldata tag1,
+        string calldata tag2,
+        string calldata endpoint,
+        string calldata feedbackURI,
+        bytes32 feedbackHash
     ) external;
     
     /**
@@ -84,14 +88,14 @@ interface IReputationRegistry {
      * @param agentId The agent ID
      * @param clientAddress The client who gave the feedback
      * @param feedbackIndex The feedback index
-     * @param responseUri URI pointing to the response data
+     * @param responseURI URI pointing to the response data
      * @param responseHash KECCAK-256 hash of response content (optional for IPFS)
      */
     function appendResponse(
         uint256 agentId,
         address clientAddress,
         uint64 feedbackIndex,
-        string calldata responseUri,
+        string calldata responseURI,
         bytes32 responseHash
     ) external;
 
@@ -101,23 +105,23 @@ interface IReputationRegistry {
      * @notice Get aggregated summary for an agent
      * @param agentId The agent ID (mandatory)
      * @param clientAddresses Filter by specific clients (optional)
-     * @param tag1 Filter by tag1 (optional, use bytes32(0) to skip)
-     * @param tag2 Filter by tag2 (optional, use bytes32(0) to skip)
+     * @param tag1 Filter by tag1 (optional, use empty string to skip)
+     * @param tag2 Filter by tag2 (optional, use empty string to skip)
      * @return count Number of feedback entries
      * @return averageScore Average score (0-100)
      */
     function getSummary(
         uint256 agentId,
         address[] calldata clientAddresses,
-        bytes32 tag1,
-        bytes32 tag2
+        string calldata tag1,
+        string calldata tag2
     ) external view returns (uint64 count, uint8 averageScore);
     
     /**
      * @notice Read a specific feedback entry
      * @param agentId The agent ID
      * @param clientAddress The client address
-     * @param index The feedback index
+     * @param feedbackIndex The feedback index
      * @return score The feedback score
      * @return tag1 First tag
      * @return tag2 Second tag
@@ -126,11 +130,11 @@ interface IReputationRegistry {
     function readFeedback(
         uint256 agentId,
         address clientAddress,
-        uint64 index
+        uint64 feedbackIndex
     ) external view returns (
         uint8 score,
-        bytes32 tag1,
-        bytes32 tag2,
+        string memory tag1,
+        string memory tag2,
         bool isRevoked
     );
     
@@ -141,7 +145,8 @@ interface IReputationRegistry {
      * @param tag1 Filter by tag1 (optional)
      * @param tag2 Filter by tag2 (optional)
      * @param includeRevoked Whether to include revoked feedback
-     * @return clients Array of client addresses
+     * @return clientAddresses Array of client addresses
+     * @return feedbackIndexes Array of feedback indexes
      * @return scores Array of scores
      * @return tag1s Array of tag1 values
      * @return tag2s Array of tag2 values
@@ -150,14 +155,15 @@ interface IReputationRegistry {
     function readAllFeedback(
         uint256 agentId,
         address[] calldata clientAddresses,
-        bytes32 tag1,
-        bytes32 tag2,
+        string calldata tag1,
+        string calldata tag2,
         bool includeRevoked
     ) external view returns (
-        address[] memory clients,
+        address[] memory,
+        uint64[] memory feedbackIndexes,
         uint8[] memory scores,
-        bytes32[] memory tag1s,
-        bytes32[] memory tag2s,
+        string[] memory tag1s,
+        string[] memory tag2s,
         bool[] memory revokedStatuses
     );
     

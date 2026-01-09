@@ -3,8 +3,11 @@ pragma solidity 0.8.19;
 
 /**
  * @title IValidationRegistry
- * @dev Interface for ERC-8004 v1.0 Validation Registry
+ * @dev Interface for ERC-8004 Validation Registry (Jan 2026 Update)
  * @notice Generic hooks for requesting and recording independent validation
+ * 
+ * ⚠️ WARNING: This section is still under active updates with the TEE community.
+ * Expect further changes later in 2026. Consider this EXPERIMENTAL.
  * 
  * This interface enables agents to request verification of their work and allows
  * validator smart contracts to provide responses that can be tracked on-chain.
@@ -22,7 +25,7 @@ interface IValidationRegistry {
     event ValidationRequest(
         address indexed validatorAddress,
         uint256 indexed agentId,
-        string requestUri,
+        string requestURI,
         bytes32 indexed requestHash
     );
     
@@ -34,9 +37,9 @@ interface IValidationRegistry {
         uint256 indexed agentId,
         bytes32 indexed requestHash,
         uint8 response,
-        string responseUri,
+        string responseURI,
         bytes32 responseHash,
-        bytes32 tag
+        string tag
     );
 
     // ============ Core Functions ============
@@ -46,13 +49,13 @@ interface IValidationRegistry {
      * @dev Must be called by the owner or operator of the agent
      * @param validatorAddress The address of the validator (can be EOA or contract)
      * @param agentId The agent requesting validation
-     * @param requestUri URI pointing to off-chain validation data
-     * @param requestHash KECCAK-256 hash of request data (optional for IPFS)
+     * @param requestURI URI pointing to off-chain validation data
+     * @param requestHash KECCAK-256 hash of request payload (mandatory)
      */
     function validationRequest(
         address validatorAddress,
         uint256 agentId,
-        string calldata requestUri,
+        string calldata requestURI,
         bytes32 requestHash
     ) external;
     
@@ -62,16 +65,16 @@ interface IValidationRegistry {
      * @dev Can be called multiple times for progressive validation states
      * @param requestHash The hash of the validation request
      * @param response The validation result (0-100)
-     * @param responseUri URI pointing to validation evidence (optional)
+     * @param responseURI URI pointing to validation evidence (optional)
      * @param responseHash KECCAK-256 hash of response data (optional for IPFS)
      * @param tag Custom tag for categorization (optional)
      */
     function validationResponse(
         bytes32 requestHash,
         uint8 response,
-        string calldata responseUri,
+        string calldata responseURI,
         bytes32 responseHash,
-        bytes32 tag
+        string calldata tag
     ) external;
 
     // ============ Read Functions ============
@@ -89,7 +92,7 @@ interface IValidationRegistry {
         address validatorAddress,
         uint256 agentId,
         uint8 response,
-        bytes32 tag,
+        string memory tag,
         uint256 lastUpdate
     );
     
@@ -97,15 +100,15 @@ interface IValidationRegistry {
      * @notice Get aggregated validation summary for an agent
      * @param agentId The agent ID (mandatory)
      * @param validatorAddresses Filter by validators (optional)
-     * @param tag Filter by tag (optional, use bytes32(0) to skip)
+     * @param tag Filter by tag (optional, use empty string to skip)
      * @return count Number of validations
-     * @return avgResponse Average response value (0-100)
+     * @return averageResponse Average response value (0-100)
      */
     function getSummary(
         uint256 agentId,
         address[] calldata validatorAddresses,
-        bytes32 tag
-    ) external view returns (uint64 count, uint8 avgResponse);
+        string calldata tag
+    ) external view returns (uint64 count, uint8 averageResponse);
     
     /**
      * @notice Get all validation request hashes for an agent
@@ -133,13 +136,13 @@ interface IValidationRegistry {
      * @param requestHash The request hash
      * @return validatorAddress The validator address
      * @return agentId The agent ID
-     * @return requestUri The request URI
+     * @return requestURI The request URI
      * @return timestamp The request timestamp
      */
     function getRequest(bytes32 requestHash) external view returns (
         address validatorAddress,
         uint256 agentId,
-        string memory requestUri,
+        string memory requestURI,
         uint256 timestamp
     );
     

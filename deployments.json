@@ -1,31 +1,34 @@
 {
-  "erc8004_v1": {
-    "version": "1.0.0",
+  "erc8004_jan2026_update": {
+    "version": "1.1.0",
+    "update": "Jan 2026 Update",
     "deployer": "0x9B4Cef62a0ce1671ccFEFA6a6D8cBFa165c49831",
-    "deploymentDate": "2025-10-09",
-    "contracts": {
-      "identityRegistry": "0x7177a6867296406881E20d6647232314736Dd09A",
-      "reputationRegistry": "0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322",
-      "validationRegistry": "0x662b40A526cb4017d947e71eAF6753BF3eeE66d8"
-    },
+    "deploymentDate": "2026-01-09",
+    "spec": "ERC-8004 Jan 2026 Update",
+    "solidity": "0.8.19",
+    "note": "Deployed with standard CREATE (not deterministic). Addresses differ across chains.",
     "networks": {
       "ethereum_sepolia": {
         "chainId": 11155111,
         "name": "Ethereum Sepolia",
-        "rpcUrl": "https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY",
+        "rpcUrl": "https://ethereum-sepolia-rpc.publicnode.com",
         "blockExplorer": "https://sepolia.etherscan.io",
         "contracts": {
           "identityRegistry": {
-            "address": "0x7177a6867296406881E20d6647232314736Dd09A",
-            "url": "https://sepolia.etherscan.io/address/0x7177a6867296406881E20d6647232314736Dd09A"
+            "address": "0xaf8390aeeef89a2d60dcf57462c0478044cfe4a5",
+            "url": "https://sepolia.etherscan.io/address/0xaf8390aeeef89a2d60dcf57462c0478044cfe4a5",
+            "verified": true
           },
           "reputationRegistry": {
-            "address": "0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322",
-            "url": "https://sepolia.etherscan.io/address/0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322"
+            "address": "0xef1f86681807e7f5ce6f7728e8a81e013c51be9f",
+            "url": "https://sepolia.etherscan.io/address/0xef1f86681807e7f5ce6f7728e8a81e013c51be9f",
+            "verified": false,
+            "note": "Deployed and functional, verification pending"
           },
           "validationRegistry": {
-            "address": "0x662b40A526cb4017d947e71eAF6753BF3eeE66d8",
-            "url": "https://sepolia.etherscan.io/address/0x662b40A526cb4017d947e71eAF6753BF3eeE66d8"
+            "address": "0x19a5b10ce0a9aa4248c726fba99853d4be1da6c7",
+            "url": "https://sepolia.etherscan.io/address/0x19a5b10ce0a9aa4248c726fba99853d4be1da6c7",
+            "verified": true
           }
         }
       },
@@ -36,80 +39,23 @@
         "blockExplorer": "https://sepolia.basescan.org",
         "contracts": {
           "identityRegistry": {
-            "address": "0x7177a6867296406881E20d6647232314736Dd09A",
-            "url": "https://sepolia.basescan.org/address/0x7177a6867296406881E20d6647232314736Dd09A"
+            "address": "0xdc527768082c489e0ee228d24d3cfa290214f387",
+            "url": "https://sepolia.basescan.org/address/0xdc527768082c489e0ee228d24d3cfa290214f387",
+            "verified": true
           },
           "reputationRegistry": {
-            "address": "0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322",
-            "url": "https://sepolia.basescan.org/address/0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322"
+            "address": "0xd1f3ed781c16d69fb6b2fe3d0d9cb11aa3529fc8",
+            "url": "https://sepolia.basescan.org/address/0xd1f3ed781c16d69fb6b2fe3d0d9cb11aa3529fc8",
+            "verified": false,
+            "note": "Deployed and functional, verification pending"
           },
           "validationRegistry": {
-            "address": "0x662b40A526cb4017d947e71eAF6753BF3eeE66d8",
-            "url": "https://sepolia.basescan.org/address/0x662b40A526cb4017d947e71eAF6753BF3eeE66d8"
-          }
-        }
-      },
-      "optimism_sepolia": {
-        "chainId": 11155420,
-        "name": "Optimism Sepolia",
-        "rpcUrl": "https://sepolia.optimism.io",
-        "blockExplorer": "https://sepolia-optimistic.etherscan.io",
-        "contracts": {
-          "identityRegistry": {
-            "address": "0x7177a6867296406881E20d6647232314736Dd09A",
-            "url": "https://sepolia-optimistic.etherscan.io/address/0x7177a6867296406881E20d6647232314736Dd09A"
-          },
-          "reputationRegistry": {
-            "address": "0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322",
-            "url": "https://sepolia-optimistic.etherscan.io/address/0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322"
-          },
-          "validationRegistry": {
-            "address": "0x662b40A526cb4017d947e71eAF6753BF3eeE66d8",
-            "url": "https://sepolia-optimistic.etherscan.io/address/0x662b40A526cb4017d947e71eAF6753BF3eeE66d8"
-          }
-        }
-      },
-      "mode_testnet": {
-        "chainId": 919,
-        "name": "Mode Testnet",
-        "rpcUrl": "https://sepolia.mode.network",
-        "blockExplorer": "https://sepolia.explorer.mode.network",
-        "contracts": {
-          "identityRegistry": {
-            "address": "0x7177a6867296406881E20d6647232314736Dd09A",
-            "url": "https://sepolia.explorer.mode.network/address/0x7177a6867296406881E20d6647232314736Dd09A"
-          },
-          "reputationRegistry": {
-            "address": "0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322",
-            "url": "https://sepolia.explorer.mode.network/address/0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322"
-          },
-          "validationRegistry": {
-            "address": "0x662b40A526cb4017d947e71eAF6753BF3eeE66d8",
-            "url": "https://sepolia.explorer.mode.network/address/0x662b40A526cb4017d947e71eAF6753BF3eeE66d8"
-          }
-        }
-      },
-      "zg_testnet": {
-        "chainId": 16602,
-        "name": "0G Testnet",
-        "rpcUrl": "https://evmrpc-testnet.0g.ai",
-        "blockExplorer": "https://chainscan-galileo.0g.ai",
-        "contracts": {
-          "identityRegistry": {
-            "address": "0x7177a6867296406881E20d6647232314736Dd09A",
-            "url": "https://chainscan-galileo.0g.ai/address/0x7177a6867296406881E20d6647232314736Dd09A"
-          },
-          "reputationRegistry": {
-            "address": "0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322",
-            "url": "https://chainscan-galileo.0g.ai/address/0xB5048e3ef1DA4E04deB6f7d0423D06F63869e322"
-          },
-          "validationRegistry": {
-            "address": "0x662b40A526cb4017d947e71eAF6753BF3eeE66d8",
-            "url": "https://chainscan-galileo.0g.ai/address/0x662b40A526cb4017d947e71eAF6753BF3eeE66d8"
+            "address": "0x04a32b8e26455eaba3717d55cc6a3c9a24a6df46",
+            "url": "https://sepolia.basescan.org/address/0x04a32b8e26455eaba3717d55cc6a3c9a24a6df46",
+            "verified": true
           }
         }
       }
     }
   }
 }
-

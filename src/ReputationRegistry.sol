@@ -1,33 +1,33 @@
 // SPDX-License-Identifier: CC0-1.0
 pragma solidity 0.8.19;
 
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "./IdentityRegistry.sol";
 import "./interfaces/IReputationRegistry.sol";
 
 /**
  * @title ReputationRegistry
- * @dev ERC-8004 v1.0 Reputation Registry - Reference Implementation
- * @notice On-chain feedback system with cryptographic authorization
+ * @dev ERC-8004 Reputation Registry - Reference Implementation (Jan 2026 Update)
+ * @notice On-chain feedback system - NO PRE-AUTHORIZATION REQUIRED
  * 
- * This contract implements the Reputation Registry as specified in ERC-8004 v1.0.
+ * This contract implements the Reputation Registry as specified in ERC-8004 (Jan 2026 Update).
  * It provides a standard interface for posting and fetching feedback signals with
  * on-chain storage and aggregation capabilities.
  * 
- * Key Features:
- * - Cryptographic feedback authorization (EIP-191/ERC-1271)
- * - On-chain feedback storage with scores (0-100)
- * - Tag-based categorization system
- * - IPFS/URI support with integrity hashes
- * - Feedback revocation
- * - Response appending by any party
- * - On-chain aggregation for composability
+ * Key Changes in Jan 2026 Update:
+ * - ❌ REMOVED: feedbackAuth pre-authorization mechanism (~200 lines deleted!)
+ * - ❌ REMOVED: Signature verification (ECDSA/ERC-1271)
+ * - ❌ REMOVED: indexLimit, expiry checks
+ * - ✅ NEW: Direct feedback submission (anyone can submit)
+ * - ✅ NEW: String tags instead of bytes32 (more flexible, human-readable)
+ * - ✅ NEW: endpoint parameter
+ * - ✅ NEW: feedbackIndex in events
+ * 
+ * Spam/Sybil resistance is now handled through off-chain filtering and reputation
+ * systems, as per the new spec rationale.
  * 
  * @author ChaosChain Labs
  */
 contract ReputationRegistry is IReputationRegistry {
-    using ECDSA for bytes32;
 
     // ============ State Variables ============
     
@@ -37,20 +37,9 @@ contract ReputationRegistry is IReputationRegistry {
     /// @dev Struct to store feedback data
     struct Feedback {
         uint8 score;
-        bytes32 tag1;
-        bytes32 tag2;
+        string tag1;
+        string tag2;
         bool isRevoked;
-    }
-    
-    /// @dev Struct for feedback authorization
-    struct FeedbackAuth {
-        uint256 agentId;
-        address clientAddress;
-        uint64 indexLimit;
-        uint256 expiry;
-        uint256 chainId;
-        address identityRegistry;
-        address signerAddress;
     }
     
     /// @dev agentId => clientAddress => feedbackIndex => Feedback
@@ -68,9 +57,6 @@ contract ReputationRegistry is IReputationRegistry {
     /// @dev agentId => clientAddress => feedbackIndex => responder => response count
     mapping(uint256 => mapping(address => mapping(uint64 => mapping(address => uint64)))) private _responseCount;
 
-    /// @dev Size of FeedbackAuth struct in bytes (7 fields × 32 bytes each)
-    uint256 private constant FEEDBACK_AUTH_STRUCT_SIZE = 224;
-
     // ============ Constructor ============
     
     /**
@@ -86,22 +72,23 @@ contract ReputationRegistry is IReputationRegistry {
     
     /**
      * @notice Give feedback for an agent
+     * @dev NO PRE-AUTHORIZATION REQUIRED - direct submission in Jan 2026 Update
      * @param agentId The agent receiving feedback
      * @param score The feedback score (0-100)
      * @param tag1 First tag for categorization (optional)
      * @param tag2 Second tag for categorization (optional)
-     * @param fileuri URI pointing to off-chain feedback data (optional)
-     * @param filehash KECCAK-256 hash of the file content (optional for IPFS)
-     * @param feedbackAuth Signed authorization from the agent
+     * @param endpoint The endpoint that was used (optional)
+     * @param feedbackURI URI pointing to off-chain feedback data (optional)
+     * @param feedbackHash KECCAK-256 hash of the file content (optional for IPFS)
      */
     function giveFeedback(
         uint256 agentId,
         uint8 score,
-        bytes32 tag1,
-        bytes32 tag2,
-        string calldata fileuri,
-        bytes32 filehash,
-        bytes memory feedbackAuth
+        string calldata tag1,
+        string calldata tag2,
+        string calldata endpoint,
+        string calldata feedbackURI,
+        bytes32 feedbackHash
     ) external {
         // Validate score
         require(score <= 100, "Score must be 0-100");
@@ -109,72 +96,8 @@ contract ReputationRegistry is IReputationRegistry {
         // Verify agent exists
         require(identityRegistry.agentExists(agentId), "Agent does not exist");
         
-        // Decode and verify feedback authorization
-        FeedbackAuth memory auth = _decodeFeedbackAuth(feedbackAuth);
-        
-        // Verify authorization parameters
-        require(auth.agentId == agentId, "AgentId mismatch");
-        require(auth.clientAddress == msg.sender, "ClientAddress mismatch");
-        require(auth.chainId == block.chainid, "ChainId mismatch");
-        require(auth.identityRegistry == address(identityRegistry), "Registry mismatch");
-        require(block.timestamp < auth.expiry, "Authorization expired");
-        
         // Get current index for this client-agent pair
         uint64 currentIndex = _lastIndex[agentId][msg.sender] + 1;
-        require(currentIndex <= auth.indexLimit, "Index limit exceeded");
-        
-        // Verify signer is owner or approved operator
-        address agentOwner = identityRegistry.ownerOf(agentId);
-        
-        // SECURITY: Prevent self-feedback to maintain integrity
-        require(msg.sender != agentOwner, "Self-feedback not allowed");
-        require(
-            auth.signerAddress == agentOwner || 
-            identityRegistry.isApprovedForAll(agentOwner, auth.signerAddress) ||
-            identityRegistry.getApproved(agentId) == auth.signerAddress,
-            "Invalid signer"
-        );
-        
-        // Extract signature (last 65 bytes: r=32, s=32, v=1)
-        require(feedbackAuth.length >= 289, "Invalid auth data length"); // 224 + 65
-        
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-        
-        assembly {
-            // feedbackAuth layout: [length][FEEDBACK_AUTH_STRUCT_SIZE bytes struct][32 bytes r][32 bytes s][1 byte v]
-            let dataPtr := add(feedbackAuth, 32)                 // Skip length prefix
-            let sigStart := add(dataPtr, FEEDBACK_AUTH_STRUCT_SIZE) // Start of signature
-            r := mload(sigStart)                                 // Load r (32 bytes)
-            s := mload(add(sigStart, 32))                        // Load s (32 bytes)
-            v := byte(0, mload(add(sigStart, 64)))               // Load v (1 byte)
-        }
-        
-        // Verify signature using EIP-191 (personal sign) or ERC-1271 (smart contract)
-        // As per spec: "signed using EIP-191 or ERC-1271"
-        bytes32 messageHash = _hashFeedbackAuth(auth);
-        
-        // Prepare signature bytes for verification
-        bytes memory signature = new bytes(65);
-        assembly {
-            mstore(add(signature, 32), r)
-            mstore(add(signature, 64), s)
-            mstore8(add(signature, 96), v)
-        }
-        
-        // Try EIP-191 personal sign first (for EOAs) using tryRecover to avoid revert
-        (address recoveredSigner, ECDSA.RecoverError error) = ECDSA.tryRecover(messageHash, signature);
-        
-        // If ECDSA recovery succeeds and matches, accept it
-        bool validSignature = (error == ECDSA.RecoverError.NoError && recoveredSigner == auth.signerAddress);
-        
-        // If EOA recovery fails or doesn't match, try ERC-1271 for smart contract wallets
-        if (!validSignature) {
-            validSignature = SignatureChecker.isValidSignatureNow(auth.signerAddress, messageHash, signature);
-        }
-        
-        require(validSignature, "Invalid signature");
         
         // Store feedback
         _feedback[agentId][msg.sender][currentIndex] = Feedback({
@@ -193,7 +116,7 @@ contract ReputationRegistry is IReputationRegistry {
             _clientExists[agentId][msg.sender] = true;
         }
         
-        emit NewFeedback(agentId, msg.sender, score, tag1, tag2, fileuri, filehash);
+        emit NewFeedback(agentId, msg.sender, currentIndex, score, tag1, tag2, endpoint, feedbackURI, feedbackHash);
     }
     
     /**
@@ -215,23 +138,23 @@ contract ReputationRegistry is IReputationRegistry {
      * @param agentId The agent ID
      * @param clientAddress The client who gave the feedback
      * @param feedbackIndex The feedback index
-     * @param responseUri URI pointing to the response data
+     * @param responseURI URI pointing to the response data
      * @param responseHash KECCAK-256 hash of response content (optional for IPFS)
      */
     function appendResponse(
         uint256 agentId,
         address clientAddress,
         uint64 feedbackIndex,
-        string calldata responseUri,
+        string calldata responseURI,
         bytes32 responseHash
     ) external {
         require(feedbackIndex > 0 && feedbackIndex <= _lastIndex[agentId][clientAddress], "Invalid index");
-        require(bytes(responseUri).length > 0, "Empty URI");
+        require(bytes(responseURI).length > 0, "Empty URI");
         
         // Increment response count for this responder
         _responseCount[agentId][clientAddress][feedbackIndex][msg.sender]++;
         
-        emit ResponseAppended(agentId, clientAddress, feedbackIndex, msg.sender, responseUri, responseHash);
+        emit ResponseAppended(agentId, clientAddress, feedbackIndex, msg.sender, responseURI);
     }
 
     // ============ Read Functions ============
@@ -241,20 +164,20 @@ contract ReputationRegistry is IReputationRegistry {
      * @dev IMPORTANT: This function is designed for OFF-CHAIN consumption.
      *      For agents with many feedback entries, calling without filters may exceed gas limits.
      *      ALWAYS use the `clientAddresses` filter for popular agents to prevent DoS.
-     *      As per ERC-8004 v1.0 spec (line 209): "Without filtering by clientAddresses,
+     *      As per ERC-8004 (Jan 2026 Update): "Without filtering by clientAddresses,
      *      results are subject to Sybil/spam attacks."
      * @param agentId The agent ID (mandatory)
      * @param clientAddresses Filter by specific clients (RECOMMENDED for popular agents)
-     * @param tag1 Filter by tag1 (optional, bytes32(0) to skip)
-     * @param tag2 Filter by tag2 (optional, bytes32(0) to skip)
+     * @param tag1 Filter by tag1 (optional, empty string to skip)
+     * @param tag2 Filter by tag2 (optional, empty string to skip)
      * @return count Number of feedback entries
      * @return averageScore Average score (0-100)
      */
     function getSummary(
         uint256 agentId,
         address[] calldata clientAddresses,
-        bytes32 tag1,
-        bytes32 tag2
+        string calldata tag1,
+        string calldata tag2
     ) external view returns (uint64 count, uint8 averageScore) {
         address[] memory clients;
         if (clientAddresses.length > 0) {
@@ -266,6 +189,9 @@ contract ReputationRegistry is IReputationRegistry {
         uint256 totalScore = 0;
         uint64 validCount = 0;
         
+        bool filterTag1 = bytes(tag1).length > 0;
+        bool filterTag2 = bytes(tag2).length > 0;
+        
         for (uint256 i = 0; i < clients.length; i++) {
             uint64 lastIdx = _lastIndex[agentId][clients[i]];
             
@@ -276,8 +202,8 @@ contract ReputationRegistry is IReputationRegistry {
                 if (fb.isRevoked) continue;
                 
                 // Apply tag filters
-                if (tag1 != bytes32(0) && fb.tag1 != tag1) continue;
-                if (tag2 != bytes32(0) && fb.tag2 != tag2) continue;
+                if (filterTag1 && keccak256(bytes(fb.tag1)) != keccak256(bytes(tag1))) continue;
+                if (filterTag2 && keccak256(bytes(fb.tag2)) != keccak256(bytes(tag2))) continue;
                 
                 totalScore += fb.score;
                 validCount++;
@@ -292,7 +218,7 @@ contract ReputationRegistry is IReputationRegistry {
      * @notice Read a specific feedback entry
      * @param agentId The agent ID
      * @param clientAddress The client address
-     * @param index The feedback index
+     * @param feedbackIndex The feedback index
      * @return score The feedback score
      * @return tag1 First tag
      * @return tag2 Second tag
@@ -301,15 +227,15 @@ contract ReputationRegistry is IReputationRegistry {
     function readFeedback(
         uint256 agentId,
         address clientAddress,
-        uint64 index
+        uint64 feedbackIndex
     ) external view returns (
         uint8 score,
-        bytes32 tag1,
-        bytes32 tag2,
+        string memory tag1,
+        string memory tag2,
         bool isRevoked
     ) {
-        require(index > 0 && index <= _lastIndex[agentId][clientAddress], "Invalid index");
-        Feedback storage fb = _feedback[agentId][clientAddress][index];
+        require(feedbackIndex > 0 && feedbackIndex <= _lastIndex[agentId][clientAddress], "Invalid index");
+        Feedback storage fb = _feedback[agentId][clientAddress][feedbackIndex];
         return (fb.score, fb.tag1, fb.tag2, fb.isRevoked);
     }
     
@@ -318,13 +244,14 @@ contract ReputationRegistry is IReputationRegistry {
      * @dev IMPORTANT: This function is designed for OFF-CHAIN consumption (indexers, frontends).
      *      For agents with many feedback entries, calling without filters may exceed gas limits.
      *      ALWAYS use the `clientAddresses` filter for popular agents to prevent DoS.
-     *      As per ERC-8004 v1.0 spec: "more complex reputation aggregation will happen off-chain"
+     *      As per ERC-8004 (Jan 2026 Update): "more complex reputation aggregation will happen off-chain"
      * @param agentId The agent ID (mandatory)
      * @param clientAddresses Filter by clients (RECOMMENDED for popular agents)
-     * @param tag1 Filter by tag1 (optional, bytes32(0) to ignore)
-     * @param tag2 Filter by tag2 (optional, bytes32(0) to ignore)
+     * @param tag1 Filter by tag1 (optional, empty string to ignore)
+     * @param tag2 Filter by tag2 (optional, empty string to ignore)
      * @param includeRevoked Whether to include revoked feedback
-     * @return clients Array of client addresses
+     * @return clientAddresses_ Array of client addresses
+     * @return feedbackIndexes Array of feedback indexes
      * @return scores Array of scores
      * @return tag1s Array of tag1 values
      * @return tag2s Array of tag2 values
@@ -333,14 +260,15 @@ contract ReputationRegistry is IReputationRegistry {
     function readAllFeedback(
         uint256 agentId,
         address[] calldata clientAddresses,
-        bytes32 tag1,
-        bytes32 tag2,
+        string calldata tag1,
+        string calldata tag2,
         bool includeRevoked
     ) external view returns (
-        address[] memory clients,
+        address[] memory clientAddresses_,
+        uint64[] memory feedbackIndexes,
         uint8[] memory scores,
-        bytes32[] memory tag1s,
-        bytes32[] memory tag2s,
+        string[] memory tag1s,
+        string[] memory tag2s,
         bool[] memory revokedStatuses
     ) {
         address[] memory clientList;
@@ -354,10 +282,11 @@ contract ReputationRegistry is IReputationRegistry {
         uint256 totalCount = _countValidFeedback(agentId, clientList, tag1, tag2, includeRevoked);
         
         // Initialize arrays
-        clients = new address[](totalCount);
+        clientAddresses_ = new address[](totalCount);
+        feedbackIndexes = new uint64[](totalCount);
         scores = new uint8[](totalCount);
-        tag1s = new bytes32[](totalCount);
-        tag2s = new bytes32[](totalCount);
+        tag1s = new string[](totalCount);
+        tag2s = new string[](totalCount);
         revokedStatuses = new bool[](totalCount);
         
         // Populate arrays
@@ -367,7 +296,8 @@ contract ReputationRegistry is IReputationRegistry {
             tag1,
             tag2,
             includeRevoked,
-            clients,
+            clientAddresses_,
+            feedbackIndexes,
             scores,
             tag1s,
             tag2s,
@@ -381,17 +311,20 @@ contract ReputationRegistry is IReputationRegistry {
     function _countValidFeedback(
         uint256 agentId,
         address[] memory clientList,
-        bytes32 tag1,
-        bytes32 tag2,
+        string calldata tag1,
+        string calldata tag2,
         bool includeRevoked
     ) internal view returns (uint256 totalCount) {
+        bool filterTag1 = bytes(tag1).length > 0;
+        bool filterTag2 = bytes(tag2).length > 0;
+        
         for (uint256 i = 0; i < clientList.length; i++) {
             uint64 lastIdx = _lastIndex[agentId][clientList[i]];
             for (uint64 j = 1; j <= lastIdx; j++) {
                 Feedback storage fb = _feedback[agentId][clientList[i]][j];
                 if (!includeRevoked && fb.isRevoked) continue;
-                if (tag1 != bytes32(0) && fb.tag1 != tag1) continue;
-                if (tag2 != bytes32(0) && fb.tag2 != tag2) continue;
+                if (filterTag1 && keccak256(bytes(fb.tag1)) != keccak256(bytes(tag1))) continue;
+                if (filterTag2 && keccak256(bytes(fb.tag2)) != keccak256(bytes(tag2))) continue;
                 totalCount++;
             }
         }
@@ -403,25 +336,30 @@ contract ReputationRegistry is IReputationRegistry {
     function _populateFeedbackArrays(
         uint256 agentId,
         address[] memory clientList,
-        bytes32 tag1,
-        bytes32 tag2,
+        string calldata tag1,
+        string calldata tag2,
         bool includeRevoked,
         address[] memory clients,
+        uint64[] memory feedbackIndexes,
         uint8[] memory scores,
-        bytes32[] memory tag1s,
-        bytes32[] memory tag2s,
+        string[] memory tag1s,
+        string[] memory tag2s,
         bool[] memory revokedStatuses
     ) internal view {
         uint256 idx = 0;
+        bool filterTag1 = bytes(tag1).length > 0;
+        bool filterTag2 = bytes(tag2).length > 0;
+        
         for (uint256 i = 0; i < clientList.length; i++) {
             uint64 lastIdx = _lastIndex[agentId][clientList[i]];
             for (uint64 j = 1; j <= lastIdx; j++) {
                 Feedback storage fb = _feedback[agentId][clientList[i]][j];
                 if (!includeRevoked && fb.isRevoked) continue;
-                if (tag1 != bytes32(0) && fb.tag1 != tag1) continue;
-                if (tag2 != bytes32(0) && fb.tag2 != tag2) continue;
+                if (filterTag1 && keccak256(bytes(fb.tag1)) != keccak256(bytes(tag1))) continue;
+                if (filterTag2 && keccak256(bytes(fb.tag2)) != keccak256(bytes(tag2))) continue;
                 
                 clients[idx] = clientList[i];
+                feedbackIndexes[idx] = j;
                 scores[idx] = fb.score;
                 tag1s[idx] = fb.tag1;
                 tag2s[idx] = fb.tag2;
@@ -507,54 +445,5 @@ contract ReputationRegistry is IReputationRegistry {
      */
     function getIdentityRegistry() external view returns (address registry) {
         return address(identityRegistry);
-    }
-
-    // ============ Internal Functions ============
-    
-    /**
-     * @dev Decode feedback authorization from bytes
-     * @param data The encoded authorization data
-     * @return auth The decoded FeedbackAuth struct
-     */
-    function _decodeFeedbackAuth(bytes memory data) internal pure returns (FeedbackAuth memory auth) {
-        // Data format: abi.encode(struct fields) + signature (65 bytes)
-        require(data.length >= 65 + FEEDBACK_AUTH_STRUCT_SIZE, "Invalid auth data");
-        
-        // Decode struct fields (first FEEDBACK_AUTH_STRUCT_SIZE bytes)
-        bytes memory structData = new bytes(FEEDBACK_AUTH_STRUCT_SIZE);
-        for (uint256 i = 0; i < FEEDBACK_AUTH_STRUCT_SIZE; i++) {
-            structData[i] = data[i];
-        }
-        
-        (
-            auth.agentId,
-            auth.clientAddress,
-            auth.indexLimit,
-            auth.expiry,
-            auth.chainId,
-            auth.identityRegistry,
-            auth.signerAddress
-        ) = abi.decode(structData, (uint256, address, uint64, uint256, uint256, address, address));
-    }
-    
-    /**
-     * @dev Hash feedback authorization for EIP-191 personal sign
-     * @param auth The FeedbackAuth struct
-     * @return hash The EIP-191 message hash
-     */
-    function _hashFeedbackAuth(FeedbackAuth memory auth) internal pure returns (bytes32 hash) {
-        // Encode the struct as specified in ERC-8004 v1.0
-        bytes32 structHash = keccak256(abi.encode(
-            auth.agentId,
-            auth.clientAddress,
-            auth.indexLimit,
-            auth.expiry,
-            auth.chainId,
-            auth.identityRegistry,
-            auth.signerAddress
-        ));
-        
-        // EIP-191 personal sign format: "\x19Ethereum Signed Message:\n32" + hash
-        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", structHash));
     }
 }

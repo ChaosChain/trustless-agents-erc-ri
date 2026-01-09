@@ -21,25 +21,25 @@ contract IdentityRegistryTest is Test {
     
     event Registered(uint256 indexed agentId, string tokenURI, address indexed owner);
     event MetadataSet(uint256 indexed agentId, string indexed indexedKey, string key, bytes value);
-    
+
     function setUp() public {
         registry = new IdentityRegistry();
     }
-    
+
     // ============ Registration Tests ============
-    
+
     function test_Register_WithTokenURIAndMetadata() public {
         vm.startPrank(alice);
         
         // Prepare metadata
         IIdentityRegistry.MetadataEntry[] memory metadata = new IIdentityRegistry.MetadataEntry[](2);
         metadata[0] = IIdentityRegistry.MetadataEntry({
-            key: "agentName",
-            value: abi.encodePacked("Alice Agent")
+            metadataKey: "agentName",
+            metadataValue: abi.encodePacked("Alice Agent")
         });
         metadata[1] = IIdentityRegistry.MetadataEntry({
-            key: "agentType",
-            value: abi.encodePacked("AI Assistant")
+            metadataKey: "agentType",
+            metadataValue: abi.encodePacked("AI Assistant")
         });
         
         // Expect events
@@ -128,8 +128,8 @@ contract IdentityRegistryTest is Test {
         
         IIdentityRegistry.MetadataEntry[] memory metadata = new IIdentityRegistry.MetadataEntry[](1);
         metadata[0] = IIdentityRegistry.MetadataEntry({
-            key: "",
-            value: abi.encodePacked("test")
+            metadataKey: "",
+            metadataValue: abi.encodePacked("test")
         });
         
         vm.expectRevert("Empty key");
@@ -217,11 +217,11 @@ contract IdentityRegistryTest is Test {
         
         assertEq(registry.ownerOf(agentId), bob, "Bob should now own the agent");
     }
-    
+
     function test_Approve_Success() public {
         vm.prank(alice);
         uint256 agentId = registry.register(TOKEN_URI);
-        
+
         vm.prank(alice);
         registry.approve(bob, agentId);
         
@@ -299,8 +299,8 @@ contract IdentityRegistryTest is Test {
         
         IIdentityRegistry.MetadataEntry[] memory metadata = new IIdentityRegistry.MetadataEntry[](1);
         metadata[0] = IIdentityRegistry.MetadataEntry({
-            key: "largeData",
-            value: largeValue
+            metadataKey: "largeData",
+            metadataValue: largeValue
         });
         
         uint256 agentId = registry.register(TOKEN_URI, metadata);
@@ -316,8 +316,8 @@ contract IdentityRegistryTest is Test {
         IIdentityRegistry.MetadataEntry[] memory metadata = new IIdentityRegistry.MetadataEntry[](10);
         for (uint i = 0; i < 10; i++) {
             metadata[i] = IIdentityRegistry.MetadataEntry({
-                key: string(abi.encodePacked("key", vm.toString(i))),
-                value: abi.encodePacked("value", i)
+                metadataKey: string(abi.encodePacked("key", vm.toString(i))),
+                metadataValue: abi.encodePacked("value", i)
             });
         }
         
