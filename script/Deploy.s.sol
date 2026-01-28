@@ -8,11 +8,16 @@ import "../src/ValidationRegistry.sol";
 
 /**
  * @title Deploy
- * @dev Deployment script for ERC-8004 v1.0 contracts
+ * @dev Deployment script for ERC-8004 Jan 2026 Spec contracts (v1.2)
  * @notice Deploys all three core registries in the correct order
  * 
  * Usage:
  * forge script script/Deploy.s.sol:Deploy --rpc-url <RPC_URL> --broadcast --verify
+ * 
+ * v1.2 Spec Changes:
+ * - IdentityRegistry: Added unsetAgentWallet()
+ * - ReputationRegistry: int128 value + uint8 valueDecimals
+ * - ValidationRegistry: responseHash in getValidationStatus()
  * 
  * @author ChaosChain Labs
  */
@@ -41,7 +46,7 @@ contract Deploy is Script {
         vm.stopBroadcast();
         
         // Output deployment summary
-        console.log("\n=== ERC-8004 v1.0 Deployment Complete ===");
+        console.log("\n=== ERC-8004 v1.2 (Jan 2026 Spec) Deployment Complete ===");
         console.log("Network Chain ID:", block.chainid);
         console.log("Deployer:", vm.addr(deployerPrivateKey));
         console.log("\nContract Addresses:");

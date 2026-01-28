@@ -153,6 +153,13 @@ interface IIdentityRegistry is IERC721, IERC721Metadata {
      * @return wallet The agent's payment wallet address
      */
     function getAgentWallet(uint256 agentId) external view returns (address wallet);
+    
+    /**
+     * @notice Clear the agentWallet address (reset to zero address)
+     * @dev Only the owner or approved operator can call this
+     * @param agentId The agent ID
+     */
+    function unsetAgentWallet(uint256 agentId) external;
 
     // ============ View Functions ============
     

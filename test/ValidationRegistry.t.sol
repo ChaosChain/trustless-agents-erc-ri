@@ -174,12 +174,13 @@ contract ValidationRegistryTest is Test {
         validationRegistry.validationResponse(REQUEST_HASH, 100, RESPONSE_URI, RESPONSE_HASH, TAG);
         
         // Verify response was stored
-        (address validatorAddr, uint256 storedAgentId, uint8 response, string memory tag, uint256 lastUpdate) = 
+        (address validatorAddr, uint256 storedAgentId, uint8 response, bytes32 storedRespHash, string memory tag, uint256 lastUpdate) = 
             validationRegistry.getValidationStatus(REQUEST_HASH);
         
         assertEq(validatorAddr, validator);
         assertEq(storedAgentId, agentId);
         assertEq(response, 100);
+        assertEq(storedRespHash, RESPONSE_HASH);
         assertEq(tag, TAG);
         assertEq(lastUpdate, block.timestamp);
     }
@@ -193,7 +194,7 @@ contract ValidationRegistryTest is Test {
         vm.prank(validator);
         validationRegistry.validationResponse(REQUEST_HASH, 80, RESPONSE_URI, bytes32(0), "soft-finality");
 
-        (,,uint8 response1, string memory tag1,) = validationRegistry.getValidationStatus(REQUEST_HASH);
+        (,,uint8 response1,, string memory tag1,) = validationRegistry.getValidationStatus(REQUEST_HASH);
         assertEq(response1, 80);
         assertEq(tag1, "soft-finality");
         
@@ -201,7 +202,7 @@ contract ValidationRegistryTest is Test {
         vm.prank(validator);
         validationRegistry.validationResponse(REQUEST_HASH, 100, RESPONSE_URI, bytes32(0), "hard-finality");
 
-        (,,uint8 response2, string memory tag2,) = validationRegistry.getValidationStatus(REQUEST_HASH);
+        (,,uint8 response2,, string memory tag2,) = validationRegistry.getValidationStatus(REQUEST_HASH);
         assertEq(response2, 100);
         assertEq(tag2, "hard-finality");
     }
@@ -238,7 +239,7 @@ contract ValidationRegistryTest is Test {
         vm.prank(validator);
         validationRegistry.validationResponse(REQUEST_HASH, 100, "", bytes32(0), TAG);
         
-        (,,uint8 response,,) = validationRegistry.getValidationStatus(REQUEST_HASH);
+        (,,uint8 response,,,) = validationRegistry.getValidationStatus(REQUEST_HASH);
         assertEq(response, 100);
     }
     
@@ -338,12 +339,13 @@ contract ValidationRegistryTest is Test {
     function test_GetValidationStatus_NonExistent_ReturnsDefaults() public {
         // Non-existent requests return default values (no revert)
         bytes32 nonExistentHash = keccak256("nonexistent");
-        (address validatorAddr, uint256 storedAgentId, uint8 resp, string memory tagStr, uint256 lastUpd) = 
+        (address validatorAddr, uint256 storedAgentId, uint8 resp, bytes32 respHash, string memory tagStr, uint256 lastUpd) = 
             validationRegistry.getValidationStatus(nonExistentHash);
         
         assertEq(validatorAddr, address(0), "Should return address(0)");
         assertEq(storedAgentId, 0, "Should return 0");
         assertEq(resp, 0, "Should return 0");
+        assertEq(respHash, bytes32(0), "Should return bytes32(0)");
         assertEq(bytes(tagStr).length, 0, "Should return empty string");
         assertEq(lastUpd, 0, "Should return 0");
         assertFalse(validationRegistry.requestExists(nonExistentHash), "Should not exist");
@@ -355,12 +357,13 @@ contract ValidationRegistryTest is Test {
         validationRegistry.validationRequest(validator, agentId, REQUEST_URI, REQUEST_HASH);
         
         // Should return defaults for pending request (no revert)
-        (address returnedValidator, uint256 returnedAgentId, uint8 response, string memory pendingTag, uint256 lastUpdate) = 
+        (address returnedValidator, uint256 returnedAgentId, uint8 response, bytes32 pendingRespHash, string memory pendingTag, uint256 lastUpdate) = 
             validationRegistry.getValidationStatus(REQUEST_HASH);
         
         assertEq(returnedValidator, address(0), "Pending: should return address(0)");
         assertEq(returnedAgentId, 0, "Pending: should return 0");
         assertEq(response, 0, "Pending: should return 0");
+        assertEq(pendingRespHash, bytes32(0), "Pending: should return bytes32(0)");
         assertEq(bytes(pendingTag).length, 0, "Pending: should return empty string");
         assertEq(lastUpdate, 0, "Pending: should return 0");
         assertTrue(validationRegistry.requestExists(REQUEST_HASH), "Request should exist");
@@ -396,8 +399,8 @@ contract ValidationRegistryTest is Test {
         validationRegistry.validationResponse(hash2, 0, "", bytes32(0), "fail");
         vm.stopPrank();
         
-        (,,uint8 response1,,) = validationRegistry.getValidationStatus(hash1);
-        (,,uint8 response2,,) = validationRegistry.getValidationStatus(hash2);
+        (,,uint8 response1,,,) = validationRegistry.getValidationStatus(hash1);
+        (,,uint8 response2,,,) = validationRegistry.getValidationStatus(hash2);
         
         assertEq(response1, 100);
         assertEq(response2, 0);
@@ -462,7 +465,7 @@ contract ValidationRegistryTest is Test {
         vm.prank(validator);
         validationRegistry.validationResponse(REQUEST_HASH, score, RESPONSE_URI, bytes32(0), TAG);
         
-        (,,uint8 storedScore,,) = validationRegistry.getValidationStatus(REQUEST_HASH);
+        (,,uint8 storedScore,,,) = validationRegistry.getValidationStatus(REQUEST_HASH);
         assertEq(storedScore, score);
     }
     

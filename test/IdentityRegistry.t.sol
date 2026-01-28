@@ -356,4 +356,45 @@ contract IdentityRegistryTest is Test {
         
         vm.stopPrank();
     }
+    
+    // ============ unsetAgentWallet Tests ============
+    
+    function test_UnsetAgentWallet_Success() public {
+        vm.startPrank(alice);
+        
+        uint256 agentId = registry.register(TOKEN_URI);
+        
+        // Verify initial wallet is set to owner
+        assertEq(registry.getAgentWallet(agentId), alice);
+        
+        // Unset the wallet
+        registry.unsetAgentWallet(agentId);
+        
+        // Verify wallet is now address(0)
+        assertEq(registry.getAgentWallet(agentId), address(0));
+        
+        vm.stopPrank();
+    }
+    
+    function test_UnsetAgentWallet_NotOwner_Reverts() public {
+        vm.prank(alice);
+        uint256 agentId = registry.register(TOKEN_URI);
+        
+        vm.prank(bob);
+        vm.expectRevert("Not authorized");
+        registry.unsetAgentWallet(agentId);
+    }
+    
+    function test_UnsetAgentWallet_ApprovedOperator_Success() public {
+        vm.prank(alice);
+        uint256 agentId = registry.register(TOKEN_URI);
+        
+        vm.prank(alice);
+        registry.setApprovalForAll(bob, true);
+        
+        vm.prank(bob);
+        registry.unsetAgentWallet(agentId);
+        
+        assertEq(registry.getAgentWallet(agentId), address(0));
+    }
 }

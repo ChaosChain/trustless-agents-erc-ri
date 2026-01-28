@@ -12,6 +12,16 @@ pragma solidity 0.8.19;
  * feedback. Spam and Sybil resistance is handled through off-chain filtering
  * and reputation systems.
  * 
+ * Value Representation:
+ * - value (int128): Signed fixed-point value (e.g., -32 for -3.2%)
+ * - valueDecimals (uint8): Decimal places (0-18, e.g., 1 means divide by 10)
+ * 
+ * Examples:
+ * - 87/100 rating: value=87, valueDecimals=0
+ * - -3.2% yield: value=-32, valueDecimals=1
+ * - $560 revenue: value=560, valueDecimals=0
+ * - 99.77% uptime: value=9977, valueDecimals=2
+ * 
  * @author ChaosChain Labs
  */
 interface IReputationRegistry {
@@ -20,13 +30,16 @@ interface IReputationRegistry {
     
     /**
      * @dev Emitted when new feedback is given
+     * @notice indexedTag1 is for filtering, tag1 is the actual readable value
      */
     event NewFeedback(
         uint256 indexed agentId,
         address indexed clientAddress,
         uint64 feedbackIndex,
-        uint8 score,
-        string indexed tag1,
+        int128 value,
+        uint8 valueDecimals,
+        string indexed indexedTag1,
+        string tag1,
         string tag2,
         string endpoint,
         string feedbackURI,
@@ -58,9 +71,10 @@ interface IReputationRegistry {
     
     /**
      * @notice Give feedback for an agent
-     * @dev No pre-authorization required in v2.0 - direct submission
+     * @dev No pre-authorization required in Jan 2026 Update - direct submission
      * @param agentId The agent receiving feedback
-     * @param score The feedback score (0-100)
+     * @param value The feedback value as signed fixed-point (int128)
+     * @param valueDecimals The number of decimal places (0-18)
      * @param tag1 First tag for categorization (optional)
      * @param tag2 Second tag for categorization (optional)
      * @param endpoint The endpoint that was used (optional)
@@ -69,7 +83,8 @@ interface IReputationRegistry {
      */
     function giveFeedback(
         uint256 agentId,
-        uint8 score,
+        int128 value,
+        uint8 valueDecimals,
         string calldata tag1,
         string calldata tag2,
         string calldata endpoint,
@@ -105,25 +120,27 @@ interface IReputationRegistry {
     /**
      * @notice Get aggregated summary for an agent
      * @param agentId The agent ID (mandatory)
-     * @param clientAddresses Filter by specific clients (optional)
+     * @param clientAddresses Filter by specific clients (MUST be provided per spec)
      * @param tag1 Filter by tag1 (optional, use empty string to skip)
      * @param tag2 Filter by tag2 (optional, use empty string to skip)
      * @return count Number of feedback entries
-     * @return averageScore Average score (0-100)
+     * @return summaryValue Aggregated value (sum)
+     * @return summaryValueDecimals Decimal places for summaryValue
      */
     function getSummary(
         uint256 agentId,
         address[] calldata clientAddresses,
         string calldata tag1,
         string calldata tag2
-    ) external view returns (uint64 count, uint8 averageScore);
+    ) external view returns (uint64 count, int128 summaryValue, uint8 summaryValueDecimals);
     
     /**
      * @notice Read a specific feedback entry
      * @param agentId The agent ID
      * @param clientAddress The client address
      * @param feedbackIndex The feedback index
-     * @return score The feedback score
+     * @return value The feedback value (signed fixed-point)
+     * @return valueDecimals The decimal places
      * @return tag1 First tag
      * @return tag2 Second tag
      * @return isRevoked Whether the feedback is revoked
@@ -133,7 +150,8 @@ interface IReputationRegistry {
         address clientAddress,
         uint64 feedbackIndex
     ) external view returns (
-        uint8 score,
+        int128 value,
+        uint8 valueDecimals,
         string memory tag1,
         string memory tag2,
         bool isRevoked
@@ -146,9 +164,10 @@ interface IReputationRegistry {
      * @param tag1 Filter by tag1 (optional)
      * @param tag2 Filter by tag2 (optional)
      * @param includeRevoked Whether to include revoked feedback
-     * @return clientAddresses Array of client addresses
+     * @return clients Array of client addresses
      * @return feedbackIndexes Array of feedback indexes
-     * @return scores Array of scores
+     * @return values Array of values (int128)
+     * @return valueDecimals Array of value decimals
      * @return tag1s Array of tag1 values
      * @return tag2s Array of tag2 values
      * @return revokedStatuses Array of revoked statuses
@@ -160,9 +179,10 @@ interface IReputationRegistry {
         string calldata tag2,
         bool includeRevoked
     ) external view returns (
-        address[] memory,
+        address[] memory clients,
         uint64[] memory feedbackIndexes,
-        uint8[] memory scores,
+        int128[] memory values,
+        uint8[] memory valueDecimals,
         string[] memory tag1s,
         string[] memory tag2s,
         bool[] memory revokedStatuses

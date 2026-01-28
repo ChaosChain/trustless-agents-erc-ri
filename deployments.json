@@ -1,12 +1,12 @@
 {
-  "erc8004_jan2026_update": {
-    "version": "1.1.0",
-    "update": "Jan 2026 Update",
+  "erc8004_jan2026_spec_update": {
+    "version": "1.2.0",
+    "update": "Jan 2026 Spec Update",
     "deployer": "0x9B4Cef62a0ce1671ccFEFA6a6D8cBFa165c49831",
-    "deploymentDate": "2026-01-09",
-    "spec": "ERC-8004 Jan 2026 Update",
+    "deploymentDate": "2026-01-28",
+    "spec": "ERC-8004 Jan 2026 Spec (value/valueDecimals, unsetAgentWallet, responseHash)",
     "solidity": "0.8.19",
-    "note": "Deployed with standard CREATE (not deterministic). Addresses differ across chains.",
+    "note": "Full spec compliance: int128 value + uint8 valueDecimals in Reputation, unsetAgentWallet in Identity, responseHash in Validation getValidationStatus",
     "networks": {
       "ethereum_sepolia": {
         "chainId": 11155111,
@@ -15,44 +15,59 @@
         "blockExplorer": "https://sepolia.etherscan.io",
         "contracts": {
           "identityRegistry": {
-            "address": "0xaf8390aeeef89a2d60dcf57462c0478044cfe4a5",
-            "url": "https://sepolia.etherscan.io/address/0xaf8390aeeef89a2d60dcf57462c0478044cfe4a5",
+            "address": "0xf66e7CBdAE1Cb710fee7732E4e1f173624e137A7",
+            "url": "https://sepolia.etherscan.io/address/0xf66e7CBdAE1Cb710fee7732E4e1f173624e137A7",
             "verified": true
           },
           "reputationRegistry": {
-            "address": "0xef1f86681807e7f5ce6f7728e8a81e013c51be9f",
-            "url": "https://sepolia.etherscan.io/address/0xef1f86681807e7f5ce6f7728e8a81e013c51be9f",
+            "address": "0x6E2a285294B5c74CB76d76AB77C1ef15c2A9E407",
+            "url": "https://sepolia.etherscan.io/address/0x6E2a285294B5c74CB76d76AB77C1ef15c2A9E407",
             "verified": false,
-            "note": "Deployed and functional, verification pending"
+            "note": "Deployed and functional, verification pending due to via-IR compilation"
           },
           "validationRegistry": {
-            "address": "0x19a5b10ce0a9aa4248c726fba99853d4be1da6c7",
-            "url": "https://sepolia.etherscan.io/address/0x19a5b10ce0a9aa4248c726fba99853d4be1da6c7",
+            "address": "0xC26171A3c4e1d958cEA196A5e84B7418C58DCA2C",
+            "url": "https://sepolia.etherscan.io/address/0xC26171A3c4e1d958cEA196A5e84B7418C58DCA2C",
             "verified": true
           }
         }
-      },
-      "base_sepolia": {
-        "chainId": 84532,
-        "name": "Base Sepolia",
-        "rpcUrl": "https://sepolia.base.org",
-        "blockExplorer": "https://sepolia.basescan.org",
-        "contracts": {
-          "identityRegistry": {
-            "address": "0xdc527768082c489e0ee228d24d3cfa290214f387",
-            "url": "https://sepolia.basescan.org/address/0xdc527768082c489e0ee228d24d3cfa290214f387",
-            "verified": true
-          },
-          "reputationRegistry": {
-            "address": "0xd1f3ed781c16d69fb6b2fe3d0d9cb11aa3529fc8",
-            "url": "https://sepolia.basescan.org/address/0xd1f3ed781c16d69fb6b2fe3d0d9cb11aa3529fc8",
-            "verified": false,
-            "note": "Deployed and functional, verification pending"
-          },
-          "validationRegistry": {
-            "address": "0x04a32b8e26455eaba3717d55cc6a3c9a24a6df46",
-            "url": "https://sepolia.basescan.org/address/0x04a32b8e26455eaba3717d55cc6a3c9a24a6df46",
-            "verified": true
+      }
+    },
+    "specChanges": {
+      "identityRegistry": [
+        "Added unsetAgentWallet(uint256 agentId) function"
+      ],
+      "reputationRegistry": [
+        "Changed uint8 score to int128 value + uint8 valueDecimals for signed fixed-point values",
+        "Updated NewFeedback event to include both indexed and non-indexed tag1",
+        "Updated getSummary to return (count, summaryValue, summaryValueDecimals)",
+        "Updated readFeedback and readAllFeedback return types"
+      ],
+      "validationRegistry": [
+        "Added bytes32 responseHash to getValidationStatus() return values"
+      ]
+    }
+  },
+  "legacy": {
+    "erc8004_jan2026_update_v1_1": {
+      "version": "1.1.0",
+      "deploymentDate": "2026-01-09",
+      "note": "Previous deployment, superseded by v1.2.0",
+      "networks": {
+        "ethereum_sepolia": {
+          "chainId": 11155111,
+          "contracts": {
+            "identityRegistry": "0xaf8390aeeef89a2d60dcf57462c0478044cfe4a5",
+            "reputationRegistry": "0xef1f86681807e7f5ce6f7728e8a81e013c51be9f",
+            "validationRegistry": "0x19a5b10ce0a9aa4248c726fba99853d4be1da6c7"
+          }
+        },
+        "base_sepolia": {
+          "chainId": 84532,
+          "contracts": {
+            "identityRegistry": "0xdc527768082c489e0ee228d24d3cfa290214f387",
+            "reputationRegistry": "0xd1f3ed781c16d69fb6b2fe3d0d9cb11aa3529fc8",
+            "validationRegistry": "0x04a32b8e26455eaba3717d55cc6a3c9a24a6df46"
           }
         }
       }

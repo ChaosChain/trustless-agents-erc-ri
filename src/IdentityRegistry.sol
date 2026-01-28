@@ -226,6 +226,19 @@ contract IdentityRegistry is ERC721URIStorage, ReentrancyGuard, IIdentityRegistr
         require(_exists(agentId), "Agent does not exist");
         return _agentWallet[agentId];
     }
+    
+    /**
+     * @notice Clear the agentWallet address (reset to zero address)
+     * @dev Only the owner or approved operator can call this
+     * @param agentId The agent ID
+     */
+    function unsetAgentWallet(uint256 agentId) external {
+        require(_isApprovedOrOwner(msg.sender, agentId), "Not authorized");
+        
+        _agentWallet[agentId] = address(0);
+        
+        emit AgentWalletSet(agentId, address(0), msg.sender);
+    }
 
     // ============ View Functions ============
     

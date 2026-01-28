@@ -13,12 +13,16 @@ import "./interfaces/IReputationRegistry.sol";
  * It provides a standard interface for posting and fetching feedback signals with
  * on-chain storage and aggregation capabilities.
  * 
+ * Value Representation (per spec):
+ * - value (int128): Signed fixed-point value (e.g., -32 for -3.2%)
+ * - valueDecimals (uint8): Decimal places (0-18, e.g., 1 means divide by 10)
+ * 
  * Key Changes in Jan 2026 Update:
- * - ❌ REMOVED: feedbackAuth pre-authorization mechanism (~200 lines deleted!)
+ * - ❌ REMOVED: feedbackAuth pre-authorization mechanism
  * - ❌ REMOVED: Signature verification (ECDSA/ERC-1271)
- * - ❌ REMOVED: indexLimit, expiry checks
  * - ✅ NEW: Direct feedback submission (anyone can submit)
  * - ✅ NEW: String tags instead of bytes32 (more flexible, human-readable)
+ * - ✅ NEW: int128 value + uint8 valueDecimals for signed fixed-point values
  * - ✅ NEW: endpoint parameter
  * - ✅ NEW: feedbackIndex in events
  * 
@@ -36,7 +40,8 @@ contract ReputationRegistry is IReputationRegistry {
     
     /// @dev Struct to store feedback data
     struct Feedback {
-        uint8 score;
+        int128 value;
+        uint8 valueDecimals;
         string tag1;
         string tag2;
         bool isRevoked;
@@ -74,7 +79,8 @@ contract ReputationRegistry is IReputationRegistry {
      * @notice Give feedback for an agent
      * @dev NO PRE-AUTHORIZATION REQUIRED - direct submission in Jan 2026 Update
      * @param agentId The agent receiving feedback
-     * @param score The feedback score (0-100)
+     * @param value The feedback value (signed fixed-point int128)
+     * @param valueDecimals The number of decimal places (0-18)
      * @param tag1 First tag for categorization (optional)
      * @param tag2 Second tag for categorization (optional)
      * @param endpoint The endpoint that was used (optional)
@@ -83,15 +89,16 @@ contract ReputationRegistry is IReputationRegistry {
      */
     function giveFeedback(
         uint256 agentId,
-        uint8 score,
+        int128 value,
+        uint8 valueDecimals,
         string calldata tag1,
         string calldata tag2,
         string calldata endpoint,
         string calldata feedbackURI,
         bytes32 feedbackHash
     ) external {
-        // Validate score
-        require(score <= 100, "Score must be 0-100");
+        // Validate valueDecimals (must be 0-18 per spec)
+        require(valueDecimals <= 18, "valueDecimals must be 0-18");
         
         // Verify agent exists
         require(identityRegistry.agentExists(agentId), "Agent does not exist");
@@ -101,7 +108,8 @@ contract ReputationRegistry is IReputationRegistry {
         
         // Store feedback
         _feedback[agentId][msg.sender][currentIndex] = Feedback({
-            score: score,
+            value: value,
+            valueDecimals: valueDecimals,
             tag1: tag1,
             tag2: tag2,
             isRevoked: false
@@ -116,7 +124,20 @@ contract ReputationRegistry is IReputationRegistry {
             _clientExists[agentId][msg.sender] = true;
         }
         
-        emit NewFeedback(agentId, msg.sender, currentIndex, score, tag1, tag2, endpoint, feedbackURI, feedbackHash);
+        // Emit with both indexed and non-indexed tag1 per spec
+        emit NewFeedback(
+            agentId, 
+            msg.sender, 
+            currentIndex, 
+            value, 
+            valueDecimals,
+            tag1,  // indexed
+            tag1,  // non-indexed (for reading full value)
+            tag2, 
+            endpoint, 
+            feedbackURI, 
+            feedbackHash
+        );
     }
     
     /**
@@ -171,14 +192,15 @@ contract ReputationRegistry is IReputationRegistry {
      * @param tag1 Filter by tag1 (optional, empty string to skip)
      * @param tag2 Filter by tag2 (optional, empty string to skip)
      * @return count Number of feedback entries
-     * @return averageScore Average score (0-100)
+     * @return summaryValue Aggregated sum of values
+     * @return summaryValueDecimals Common decimal places (max of all entries)
      */
     function getSummary(
         uint256 agentId,
         address[] calldata clientAddresses,
         string calldata tag1,
         string calldata tag2
-    ) external view returns (uint64 count, uint8 averageScore) {
+    ) external view returns (uint64 count, int128 summaryValue, uint8 summaryValueDecimals) {
         address[] memory clients;
         if (clientAddresses.length > 0) {
             clients = clientAddresses;
@@ -186,12 +208,31 @@ contract ReputationRegistry is IReputationRegistry {
             clients = _clients[agentId];
         }
         
-        uint256 totalScore = 0;
+        int256 totalValue = 0;
         uint64 validCount = 0;
+        uint8 maxDecimals = 0;
         
         bool filterTag1 = bytes(tag1).length > 0;
         bool filterTag2 = bytes(tag2).length > 0;
         
+        // First pass: find max decimals for normalization
+        for (uint256 i = 0; i < clients.length; i++) {
+            uint64 lastIdx = _lastIndex[agentId][clients[i]];
+            
+            for (uint64 j = 1; j <= lastIdx; j++) {
+                Feedback storage fb = _feedback[agentId][clients[i]][j];
+                
+                if (fb.isRevoked) continue;
+                if (filterTag1 && keccak256(bytes(fb.tag1)) != keccak256(bytes(tag1))) continue;
+                if (filterTag2 && keccak256(bytes(fb.tag2)) != keccak256(bytes(tag2))) continue;
+                
+                if (fb.valueDecimals > maxDecimals) {
+                    maxDecimals = fb.valueDecimals;
+                }
+            }
+        }
+        
+        // Second pass: sum values normalized to max decimals
         for (uint256 i = 0; i < clients.length; i++) {
             uint64 lastIdx = _lastIndex[agentId][clients[i]];
             
@@ -205,13 +246,24 @@ contract ReputationRegistry is IReputationRegistry {
                 if (filterTag1 && keccak256(bytes(fb.tag1)) != keccak256(bytes(tag1))) continue;
                 if (filterTag2 && keccak256(bytes(fb.tag2)) != keccak256(bytes(tag2))) continue;
                 
-                totalScore += fb.score;
+                // Normalize to max decimals and sum
+                uint8 decimalDiff = maxDecimals - fb.valueDecimals;
+                int256 normalizedValue = int256(fb.value) * int256(10 ** decimalDiff);
+                totalValue += normalizedValue;
                 validCount++;
             }
         }
         
         count = validCount;
-        averageScore = validCount > 0 ? uint8(totalScore / validCount) : 0;
+        // Safe cast - if overflow, truncate to max int128
+        if (totalValue > type(int128).max) {
+            summaryValue = type(int128).max;
+        } else if (totalValue < type(int128).min) {
+            summaryValue = type(int128).min;
+        } else {
+            summaryValue = int128(totalValue);
+        }
+        summaryValueDecimals = maxDecimals;
     }
     
     /**
@@ -219,7 +271,8 @@ contract ReputationRegistry is IReputationRegistry {
      * @param agentId The agent ID
      * @param clientAddress The client address
      * @param feedbackIndex The feedback index
-     * @return score The feedback score
+     * @return value The feedback value (signed fixed-point)
+     * @return valueDecimals The decimal places
      * @return tag1 First tag
      * @return tag2 Second tag
      * @return isRevoked Whether the feedback is revoked
@@ -229,14 +282,15 @@ contract ReputationRegistry is IReputationRegistry {
         address clientAddress,
         uint64 feedbackIndex
     ) external view returns (
-        uint8 score,
+        int128 value,
+        uint8 valueDecimals,
         string memory tag1,
         string memory tag2,
         bool isRevoked
     ) {
         require(feedbackIndex > 0 && feedbackIndex <= _lastIndex[agentId][clientAddress], "Invalid index");
         Feedback storage fb = _feedback[agentId][clientAddress][feedbackIndex];
-        return (fb.score, fb.tag1, fb.tag2, fb.isRevoked);
+        return (fb.value, fb.valueDecimals, fb.tag1, fb.tag2, fb.isRevoked);
     }
     
     /**
@@ -250,9 +304,10 @@ contract ReputationRegistry is IReputationRegistry {
      * @param tag1 Filter by tag1 (optional, empty string to ignore)
      * @param tag2 Filter by tag2 (optional, empty string to ignore)
      * @param includeRevoked Whether to include revoked feedback
-     * @return clientAddresses_ Array of client addresses
+     * @return clients Array of client addresses
      * @return feedbackIndexes Array of feedback indexes
-     * @return scores Array of scores
+     * @return values Array of values (int128)
+     * @return valueDecimalsArr Array of value decimals
      * @return tag1s Array of tag1 values
      * @return tag2s Array of tag2 values
      * @return revokedStatuses Array of revoked statuses
@@ -264,9 +319,10 @@ contract ReputationRegistry is IReputationRegistry {
         string calldata tag2,
         bool includeRevoked
     ) external view returns (
-        address[] memory clientAddresses_,
+        address[] memory clients,
         uint64[] memory feedbackIndexes,
-        uint8[] memory scores,
+        int128[] memory values,
+        uint8[] memory valueDecimalsArr,
         string[] memory tag1s,
         string[] memory tag2s,
         bool[] memory revokedStatuses
@@ -282,9 +338,10 @@ contract ReputationRegistry is IReputationRegistry {
         uint256 totalCount = _countValidFeedback(agentId, clientList, tag1, tag2, includeRevoked);
         
         // Initialize arrays
-        clientAddresses_ = new address[](totalCount);
+        clients = new address[](totalCount);
         feedbackIndexes = new uint64[](totalCount);
-        scores = new uint8[](totalCount);
+        values = new int128[](totalCount);
+        valueDecimalsArr = new uint8[](totalCount);
         tag1s = new string[](totalCount);
         tag2s = new string[](totalCount);
         revokedStatuses = new bool[](totalCount);
@@ -296,9 +353,10 @@ contract ReputationRegistry is IReputationRegistry {
             tag1,
             tag2,
             includeRevoked,
-            clientAddresses_,
+            clients,
             feedbackIndexes,
-            scores,
+            values,
+            valueDecimalsArr,
             tag1s,
             tag2s,
             revokedStatuses
@@ -341,7 +399,8 @@ contract ReputationRegistry is IReputationRegistry {
         bool includeRevoked,
         address[] memory clients,
         uint64[] memory feedbackIndexes,
-        uint8[] memory scores,
+        int128[] memory values,
+        uint8[] memory valueDecimalsArr,
         string[] memory tag1s,
         string[] memory tag2s,
         bool[] memory revokedStatuses
@@ -360,7 +419,8 @@ contract ReputationRegistry is IReputationRegistry {
                 
                 clients[idx] = clientList[i];
                 feedbackIndexes[idx] = j;
-                scores[idx] = fb.score;
+                values[idx] = fb.value;
+                valueDecimalsArr[idx] = fb.valueDecimals;
                 tag1s[idx] = fb.tag1;
                 tag2s[idx] = fb.tag2;
                 revokedStatuses[idx] = fb.isRevoked;
@@ -395,12 +455,12 @@ contract ReputationRegistry is IReputationRegistry {
         
         if (clientAddress == address(0)) {
             // Count all responses for all clients from specified responders
-            address[] memory clients = _clients[agentId];
-            for (uint256 i = 0; i < clients.length; i++) {
-                uint64 lastIdx = _lastIndex[agentId][clients[i]];
+            address[] memory clientList = _clients[agentId];
+            for (uint256 i = 0; i < clientList.length; i++) {
+                uint64 lastIdx = _lastIndex[agentId][clientList[i]];
                 for (uint64 j = 1; j <= lastIdx; j++) {
                     for (uint256 k = 0; k < responders.length; k++) {
-                        count += _responseCount[agentId][clients[i]][j][responders[k]];
+                        count += _responseCount[agentId][clientList[i]][j][responders[k]];
                     }
                 }
             }

@@ -45,6 +45,7 @@ contract ValidationRegistry is IValidationRegistry {
         address validatorAddress;
         uint256 agentId;
         uint8 response;
+        bytes32 responseHash;
         string tag;
         uint256 lastUpdate;
     }
@@ -164,6 +165,7 @@ contract ValidationRegistry is IValidationRegistry {
             validatorAddress: request.validatorAddress,
             agentId: request.agentId,
             response: response,
+            responseHash: responseHash,
             tag: tag,
             lastUpdate: block.timestamp
         });
@@ -183,12 +185,13 @@ contract ValidationRegistry is IValidationRegistry {
     
     /**
      * @notice Get validation status for a request
-     * @dev Returns default values (address(0), 0, 0, "", 0) for pending requests without responses
+     * @dev Returns default values (address(0), 0, 0, bytes32(0), "", 0) for pending requests without responses
      * @dev To distinguish pending from non-existent requests, check if request exists via requestExists()
      * @param requestHash The request hash
      * @return validatorAddress The validator address (address(0) if no response yet)
      * @return agentId The agent ID (0 if no response yet)
      * @return response The validation response (0-100, or 0 if no response yet)
+     * @return responseHash The hash of the response data (bytes32(0) if no response yet)
      * @return tag The response tag ("" if no response yet)
      * @return lastUpdate Timestamp of last update (0 if no response yet)
      */
@@ -196,6 +199,7 @@ contract ValidationRegistry is IValidationRegistry {
         address validatorAddress,
         uint256 agentId,
         uint8 response,
+        bytes32 responseHash,
         string memory tag,
         uint256 lastUpdate
     ) {
@@ -210,6 +214,7 @@ contract ValidationRegistry is IValidationRegistry {
             resp.validatorAddress,
             resp.agentId,
             resp.response,
+            resp.responseHash,
             resp.tag,
             resp.lastUpdate
         );
